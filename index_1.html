@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kit Rentabilité Tournées – Tonton Business</title>
+<meta name="description" content="Outil Excel / Google Sheets pour sociétés de transport et de livraison : rentabilité par tournée, par camion et par chauffeur. Bientôt disponible.">
+<meta property="og:title" content="Kit Rentabilité Tournées – Tonton Business">
+<meta property="og:description" content="Savez-vous vraiment quelles tournées vous rapportent de l'argent ? Un outil prêt à l'emploi pour les transporteurs et livreurs.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tontonbusiness.com/">
+<meta property="og:locale" content="fr_FR">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231F3A5F'/%3E%3Ctext x='32' y='42' font-family='Arial' font-weight='700' font-size='26' fill='%23F28C28' text-anchor='middle'%3ETB%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --navy:#1F3A5F;--navy-dark:#142840;--orange:#F28C28;--orange-text:#B4580A;
+  --ink:#1B2430;--muted:#3F4A58;--soft:#5A6472;--line:#E1E5EB;--bg:#F5F6F8;--white:#FFFFFF;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,Arial,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+a{color:var(--navy)}a:hover{color:var(--orange-text)}
+h1,h2{font-family:Archivo,Arial,sans-serif;font-weight:800;color:var(--navy);margin:0;line-height:1.12}
+h2{font-size:clamp(26px,4vw,34px);margin-bottom:20px}
+h3{margin:0 0 8px;font-size:18px;font-weight:600}
+p{margin:0}
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
+.btn{display:inline-block;text-decoration:none;background:var(--orange);color:var(--ink);font-weight:700;padding:14px 24px;border-radius:10px;min-height:44px}
+.btn:hover{background:#E07A14;color:var(--ink)}
+.btn:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #7FB3FF;outline-offset:3px}
+
+/* header */
+header{background:var(--white);border-bottom:1px solid var(--line)}
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;padding-top:16px;padding-bottom:16px}
+.logo{font-family:Archivo,Arial,sans-serif;font-weight:800;font-size:21px;letter-spacing:.06em;color:var(--navy);text-decoration:none}
+nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px 22px;font-size:15px;font-weight:500}
+nav a{text-decoration:none}
+nav .btn{padding:10px 18px;font-weight:600}
+
+/* hero */
+.hero{background:var(--navy);color:var(--white)}
+.hero .wrap{display:flex;flex-wrap:wrap;gap:48px;align-items:center;padding-top:64px;padding-bottom:72px}
+.hero-text{flex:1 1 440px;min-width:0;display:flex;flex-direction:column;gap:20px}
+.kicker{font-size:14px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#F7B36B}
+.badge{align-self:flex-start;background:rgba(242,140,40,.16);color:#FFD2A6;border:1px solid rgba(242,140,40,.5);font-size:14px;font-weight:600;padding:6px 12px;border-radius:999px}
+.hero h1{color:var(--white);font-size:clamp(34px,5.4vw,52px)}
+.hero p.lead{font-size:clamp(17px,2vw,19px);color:#DCE4EE}
+.cta-row{display:flex;flex-wrap:wrap;align-items:center;gap:14px 18px;margin-top:4px}
+.cta-row span{font-size:14px;color:#C9D4E2}
+
+.mock{flex:1 1 400px;min-width:0;background:var(--white);color:var(--ink);border-radius:14px;padding:22px;box-shadow:0 18px 40px rgba(0,0,0,.25);display:flex;flex-direction:column;gap:16px}
+.mock-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.mock-title{font-family:Archivo,Arial,sans-serif;font-weight:700;font-size:18px;color:var(--navy)}
+.pill{font-size:12px;font-weight:600;color:var(--soft);background:#EEF1F5;padding:4px 10px;border-radius:999px}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.kpi{background:var(--bg);border-radius:10px;padding:12px}
+.kpi small{display:block;font-size:12px;color:var(--soft)}
+.kpi b{font-family:Archivo,Arial,sans-serif;font-size:clamp(16px,2.2vw,20px);color:var(--navy)}
+.bars{display:flex;flex-direction:column;gap:10px}
+.bars-title{font-size:13px;font-weight:600;color:var(--soft)}
+.bar{display:flex;align-items:center;gap:10px;font-size:13px}
+.bar .name{width:118px;flex:none}
+.bar .track{flex:1;height:14px;background:#EEF1F5;border-radius:4px;overflow:hidden}
+.bar .fill{display:block;height:14px;background:var(--navy)}
+.bar .fill.bad{background:#C2410C}
+.bar .val{width:56px;text-align:right;font-weight:600}
+.bar .val.bad{color:#B4380A}
+.mock-note{font-size:13px;color:var(--soft);border-top:1px solid var(--line);padding-top:12px}
+
+.video-wrap{flex:0 1 360px;min-width:0;margin:0 auto;display:flex;flex-direction:column;gap:10px;align-items:center}
+.video-wrap video{display:block;width:100%;max-width:360px;aspect-ratio:9/16;border-radius:18px;background:#142840;box-shadow:0 18px 40px rgba(0,0,0,.3);border:2px solid rgba(255,255,255,.18)}
+.video-wrap span{font-size:13px;color:#C9D4E2}
+/* sections */
+section.block{padding:64px 0}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px}
+.card{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:24px}
+.card p{font-size:16px;color:var(--muted)}
+.intro{font-size:17px;color:var(--muted);margin:-8px 0 28px}
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px 32px}
+.feature{display:flex;gap:14px;align-items:flex-start}
+.feature svg{flex:none;margin-top:2px}
+.feature b{display:block;font-size:17px;font-weight:600}
+.feature span{font-size:15px;color:var(--muted)}
+.band{background:var(--white);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px}
+.num{font-family:Archivo,Arial,sans-serif;font-weight:800;font-size:40px;color:var(--orange-text);line-height:1}
+.step h3{font-size:19px;margin-top:10px}
+.step p{font-size:16px;color:var(--muted)}
+.tags{display:flex;flex-wrap:wrap;gap:12px}
+.tag{background:var(--white);border:1px solid #C9D2DE;border-radius:999px;padding:10px 18px;font-size:15px;font-weight:500}
+.who-note{margin-top:24px;font-size:16px;color:var(--muted);max-width:760px}
+.faq{display:flex;flex-direction:column;gap:12px;max-width:860px}
+details{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+summary{cursor:pointer;font-weight:600;font-size:17px}
+details p{margin-top:12px;font-size:16px;color:var(--muted)}
+
+/* final cta */
+.final{background:var(--navy);color:var(--white);text-align:center}
+.final .wrap{max-width:760px;padding-top:72px;padding-bottom:72px;display:flex;flex-direction:column;align-items:center;gap:18px}
+.final h2{color:var(--white);margin:0;font-size:clamp(28px,4.4vw,38px)}
+.final p{font-size:18px;color:#DCE4EE}
+.final small{font-size:14px;color:#C9D4E2}
+
+footer{background:var(--navy-dark);color:#C9D4E2;font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;padding-top:26px;padding-bottom:26px}
+footer a{color:#C9D4E2}footer a:hover{color:var(--white)}
+footer .links{display:flex;flex-wrap:wrap;gap:8px 20px}
+
+@media (max-width:520px){
+  .wrap{padding:0 16px}
+  .hero .wrap{padding-top:44px;padding-bottom:52px;gap:32px}
+  section.block{padding:48px 0}
+  .bar .name{width:96px}
+  nav{gap:6px 16px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap top">
+    <a class="logo" href="#">TONTON BUSINESS</a>
+    <nav aria-label="Menu principal">
+      <a href="#contenu">Le kit</a>
+      <a href="#fonctionnement">Comment ça marche</a>
+      <a href="#faq">Questions</a>
+      <a class="btn" href="#lancement">Être prévenu</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap">
+    <div class="hero-text">
+      <div class="kicker">Pour les sociétés de transport et de livraison</div>
+      <span class="badge">Bientôt disponible</span>
+      <h1>Savez-vous vraiment quelles tournées vous rapportent de l'argent&nbsp;?</h1>
+      <p class="lead">Un tableau prêt à l'emploi qui calcule tout seul votre chiffre d'affaires, votre carburant, vos coûts et votre marge — par tournée, par camion et par chauffeur. Fonctionne sur Excel et Google Sheets.</p>
+      <div class="cta-row">
+        <a class="btn" href="mailto:contact@tontonbusiness.com?subject=Pr%C3%A9venez-moi%20du%20lancement%20du%20Kit%20Rentabilit%C3%A9%20Tourn%C3%A9es&amp;body=Bonjour%2C%0A%0AJe%20souhaite%20%C3%AAtre%20pr%C3%A9venu%20d%C3%A8s%20que%20le%20Kit%20Rentabilit%C3%A9%20Tourn%C3%A9es%20sera%20disponible.%0A%0ANom%20de%20ma%20soci%C3%A9t%C3%A9%20%3A%20%0ANombre%20de%20v%C3%A9hicules%20%3A%20%0A%0AMerci">Être prévenu du lancement</a>
+        <span>Un e-mail, et on vous prévient dès la sortie.</span>
+      </div>
+    </div>
+
+    <div class="video-wrap">
+      <video src="video-demo.mp4" poster="video-poster.jpg" autoplay muted loop playsinline controls preload="metadata" aria-label="Vidéo de démonstration du Kit Rentabilité Tournées : trois tournées, leurs coûts, et la navette qui ne rapporte que 3,4 % de marge."></video>
+      <span>Démo en 44 secondes · données d'exemple</span>
+    </div>
+  </div>
+</section>
+
+<section class="block">
+  <div class="wrap">
+    <h2>Le chiffre d'affaires rentre. Mais la marge&nbsp;?</h2>
+    <div class="cards">
+      <div class="card"><h3>Des coûts éparpillés</h3><p>Gazole, péages, salaires, leasing, assurance, sous-traitants… tout est dans des factures différentes, jamais réuni par tournée.</p></div>
+      <div class="card"><h3>Une tournée peut plomber le mois</h3><p>Une tournée trop longue ou mal payée peut tourner à perte pendant des mois sans qu'on s'en rende compte.</p></div>
+      <div class="card"><h3>Négocier à l'aveugle</h3><p>Sans chiffres précis, difficile de renégocier un tarif avec un donneur d'ordre ou de fixer le bon prix pour un sous-traitant.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block" id="contenu" style="padding-top:8px">
+  <div class="wrap">
+    <h2>Ce que contiendra le kit</h2>
+    <p class="intro">Un seul fichier, prêt à l'emploi, avec un mode d'emploi intégré.</p>
+    <div class="features">
+      <div class="feature"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B4580A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg><div><b>Tableau de bord mensuel</b><span>CA, coûts, marge brute, frais de structure et résultat estimé, pour le mois ou l'année de votre choix.</span></div></div>
+      <div class="feature"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B4580A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg><div><b>Rentabilité par tournée</b><span>Marge, marge par point livré et marge par tournée effectuée.</span></div></div>
+      <div class="feature"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B4580A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg><div><b>Rentabilité par véhicule</b><span>Kilomètres, coût au kilomètre et marge par jour pour chaque camion ou fourgon.</span></div></div>
+      <div class="feature"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B4580A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg><div><b>Rentabilité par chauffeur</b><span>Points livrés, jours de tournée et marge par jour, chauffeur par chauffeur.</span></div></div>
+      <div class="feature"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B4580A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg><div><b>Sous-traitance intégrée</b><span>Une tournée sous-traitée ? Le prix payé au sous-traitant remplace les coûts de votre camion et de votre chauffeur.</span></div></div>
+      <div class="feature"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B4580A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg><div><b>Évolution mois par mois</b><span>Un tableau et des graphiques pour voir si votre résultat progresse au fil de l'année.</span></div></div>
+      <div class="feature"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B4580A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg><div><b>Facturation au point ou au forfait</b><span>Les deux modes de facturation les plus courants du métier sont gérés.</span></div></div>
+      <div class="feature"><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B4580A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg><div><b>Exemples et mode d'emploi</b><span>Deux mois de données d'exemple pour comprendre en 2 minutes, puis vous les remplacez par les vôtres.</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="block band" id="fonctionnement">
+  <div class="wrap">
+    <h2>Comment ça marche</h2>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><h3>Une fois au départ (15 min)</h3><p>Renseignez vos véhicules, vos chauffeurs, vos tournées et le prix du gazole.</p></div>
+      <div class="step"><div class="num">2</div><h3>Chaque jour (1 min par tournée)</h3><p>Une ligne par tournée : date, tournée, véhicule, chauffeur, points livrés, kilomètres, péages. Tout se choisit dans des listes.</p></div>
+      <div class="step"><div class="num">3</div><h3>Quand vous voulez</h3><p>Choisissez le mois : le tableau de bord vous montre ce qui gagne, ce qui perd, et où agir.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block">
+  <div class="wrap">
+    <h2>Pour qui&nbsp;?</h2>
+    <div class="tags">
+      <span class="tag">Livraison colis et e-commerce</span>
+      <span class="tag">Transport léger</span>
+      <span class="tag">Messagerie et courses express</span>
+      <span class="tag">Transporteurs poids lourds</span>
+      <span class="tag">Sous-traitants de donneurs d'ordre</span>
+      <span class="tag">Flottes de 1 à 15 véhicules</span>
+    </div>
+    <p class="who-note">Conçu par quelqu'un qui gère au quotidien une société de transport, pour répondre aux vraies questions du métier.</p>
+  </div>
+</section>
+
+<section class="block" id="faq" style="padding-top:8px">
+  <div class="wrap">
+    <h2>Questions fréquentes</h2>
+    <div class="faq">
+      <details><summary>Ça marche sur Excel ou sur Google Sheets&nbsp;?</summary><p>Les deux. Le fichier s'ouvre directement dans Excel, et s'importe dans Google Sheets en quelques clics (expliqué dans le mode d'emploi).</p></details>
+      <details><summary>Faut-il être bon en informatique&nbsp;?</summary><p>Non. Vous remplissez uniquement les cases jaunes ; toutes les formules sont déjà faites, avec un code couleur pour s'y retrouver.</p></details>
+      <details><summary>Combien de véhicules et de tournées&nbsp;?</summary><p>Jusqu'à 15 tournées, 15 véhicules, 15 chauffeurs et 1 500 lignes de saisie, soit environ un an pour une flotte de 5 à 6 véhicules.</p></details>
+      <details><summary>Un camion fait deux tournées dans la journée&nbsp;?</summary><p>C'est prévu : indiquez 0,5 en « part de journée » sur chaque ligne, et les coûts fixes ne sont pas comptés deux fois.</p></details>
+      <details><summary>Est-ce que ça remplace mon comptable&nbsp;?</summary><p>Non. C'est un outil de pilotage pour prendre de meilleures décisions au quotidien ; votre comptabilité officielle reste celle de votre expert-comptable.</p></details>
+      <details><summary>Quand sera-t-il disponible&nbsp;?</summary><p>Très bientôt. Écrivez-nous à <a href="mailto:contact@tontonbusiness.com">contact@tontonbusiness.com</a> et nous vous prévenons dès le lancement.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="final" id="lancement">
+  <div class="wrap">
+    <h2>Soyez prévenu dès le lancement</h2>
+    <p>Kit Rentabilité Tournées, Camions et Chauffeurs — fichier Excel / Google Sheets avec mode d'emploi.</p>
+    <a class="btn" href="mailto:contact@tontonbusiness.com?subject=Pr%C3%A9venez-moi%20du%20lancement%20du%20Kit%20Rentabilit%C3%A9%20Tourn%C3%A9es&amp;body=Bonjour%2C%0A%0AJe%20souhaite%20%C3%AAtre%20pr%C3%A9venu%20d%C3%A8s%20que%20le%20Kit%20Rentabilit%C3%A9%20Tourn%C3%A9es%20sera%20disponible.%0A%0ANom%20de%20ma%20soci%C3%A9t%C3%A9%20%3A%20%0ANombre%20de%20v%C3%A9hicules%20%3A%20%0A%0AMerci">Être prévenu par e-mail</a>
+    <small>Ou écrivez directement à contact@tontonbusiness.com</small>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Tonton Business</span>
+    <div class="links">
+      <a href="mentions-legales.html">Mentions légales</a>
+      <a href="mailto:contact@tontonbusiness.com">contact@tontonbusiness.com</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
