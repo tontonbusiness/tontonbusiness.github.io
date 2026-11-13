@@ -647,13 +647,20 @@ async function showAcces(condId){
   const {data:code,error}=await sb.rpc("generer_acces",{p_conducteur:condId});
   if(error){ toast(errMsg(error)); return; }
   const link=CFG.appUrl+"?code="+encodeURIComponent(code);
+  const digits=(k.tel||"").replace(/\D/g,"");
+  const intl = /^0\d{9}$/.test(digits) ? "33"+digits.slice(1) : (/^33\d{9}$/.test(digits) ? digits : "");
+  const msg = `Bonjour ${(k.nom||"").split(" ")[0]}, voici ton accès à Tonton Planning pour voir tes courses : ${link}`;
+  const envoiBtns = intl
+    ? `<div class="two"><a class="btn" style="background:#25D366;color:#0B2E17" href="https://wa.me/${intl}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Envoyer par WhatsApp</a><a class="btn btn-navy" href="sms:+${intl}?&body=${encodeURIComponent(msg)}">Envoyer par SMS</a></div><p class="muted" style="margin:0;font-size:12px">Le message s'ouvre déjà rempli : il ne reste qu'à appuyer sur Envoyer. Le SMS fonctionne surtout depuis un téléphone.</p>`
+    : `<p class="muted" style="margin:0;font-size:13px">Ajoutez le numéro de téléphone du conducteur pour l'envoyer directement par WhatsApp ou SMS.</p>`;
   let qrSvg=""; try{ const q=window.qrcode(0,"M"); q.addData(link); q.make(); qrSvg=q.createSvgTag({cellSize:5,margin:2,scalable:true}); }catch(e){}
   openModal(`<h2>Lien d'accès de ${esc(k.nom)}</h2>
     <p style="margin:0">Le conducteur ouvre ce lien <b>une fois</b> sur son téléphone (ou scanne le QR code). Il arrive ensuite directement sur ses courses. Valable 7 jours, utilisable une seule fois.</p>
     ${qrSvg?`<div class="qr" role="img" aria-label="QR code du lien d'accès">${qrSvg}</div>`:""}
     <div class="code">${esc(code)}</div>
     <label class="fld">Lien à envoyer par SMS ou WhatsApp<input type="text" id="accLink" value="${esc(link)}" readonly></label>
-    <div class="row-btns"><button type="button" class="btn btn-ghost" data-act="close">Fermer</button><button type="button" class="btn btn-accent" data-copy="#accLink">Copier le lien</button></div>
+    ${envoiBtns}
+    <div class="row-btns"><button type="button" class="btn btn-ghost" data-act="close">Fermer</button><button type="button" class="btn btn-ghost" data-copy="#accLink">Copier le lien</button></div>
     <p class="muted" style="margin:0;font-size:12px">Un nouveau lien déconnecte l'ancien téléphone du conducteur. Astuce : sur le téléphone, « Ajouter à l'écran d'accueil » crée une icône Tonton Planning.</p>`);
 }
 
