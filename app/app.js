@@ -44,7 +44,7 @@ function errMsg(e){ const m=(e&&(e.message||e.error_description||e.msg))||"";
   if(/rate limit|too many/i.test(m)) return "Trop d'essais d'un coup : réessayez dans quelques minutes.";
   if(/Failed to fetch|NetworkError|network/i.test(m)) return "Pas de connexion internet : réessayez.";
   if(/interdit|row-level security/i.test(m)) return "Action non autorisée pour votre compte.";
-  return "L'action a échoué. Réessayez.";
+  return "L'action a échoué. Réessayez." + (m ? " ("+m.slice(0,80)+")" : "");
 }
 
 /* ---------- conversions base <-> application ---------- */
@@ -705,7 +705,11 @@ document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("#modal").inne
 
 /* ---------- démarrage ---------- */
 async function boot(){
-  const { data:{session} } = await sb.auth.getSession();
+  let { data:{session} } = await sb.auth.getSession();
+  if(session){ // vérifie auprès du serveur que le compte existe toujours
+    const { error } = await sb.auth.getUser();
+    if(error && !/fetch|network/i.test(error.message||"")){ await sb.auth.signOut({scope:"local"}); session=null; }
+  }
   S.session=session; S.mem=null; S.loaded=false;
   if(session){
     const {data,error}=await sb.from("membres").select("entreprise_id,role,conducteur_id").eq("user_id",session.user.id).limit(1);
