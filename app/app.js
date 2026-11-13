@@ -2,6 +2,11 @@
 (function(){
 "use strict";
 const CFG = window.TP_CONFIG;
+const MODE = window.TP_MODE==="chauffeur" ? "chauffeur" : "exploitation"; // /chauffeur = application Dream Chauffeur
+const APPNAME = MODE==="chauffeur" ? "Dream Chauffeur" : "Tonton Planning";
+const CHAUFFEUR_URL = CFG.chauffeurUrl || "https://tontonbusiness.com/chauffeur/";
+const standalone = () => { try{ return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone===true; }catch(e){ return false; } };
+const appareil = () => { const u=navigator.userAgent||""; const d=/iPhone/.test(u)?"iPhone":/iPad/.test(u)?"iPad":/Android/.test(u)?"Android":"Ordinateur"; return d+(standalone()?" · application":" · navigateur"); };
 const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
 
 /* ---------- utilitaires ---------- */
@@ -34,8 +39,8 @@ const EID = () => S.mem && S.mem.entreprise_id;
 /* ---------- toast ---------- */
 let tt; function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true,3600); }
 function errMsg(e){ const m=(e&&(e.message||e.error_description||e.msg))||"";
-  if(/code_invalide/.test(m)) return "Ce code d'accès n'est pas valable ou a expiré. Demandez un nouveau lien à votre exploitation.";
-  if(/deja_exploitant/.test(m)) return "Ce navigateur est connecté avec un compte d'exploitation. Ouvrez le lien sur le téléphone du conducteur.";
+  if(/code_invalide/.test(m)) return "Ce code n'est pas valable. Vérifie-le, ou demande un nouveau code à ton exploitation.";
+  if(/deja_exploitant/.test(m)) return "Ce navigateur est connecté avec un compte d'exploitation. Ouvrez Dream Chauffeur sur le téléphone du conducteur.";
   if(/deja_membre/.test(m)) return "Ce compte est déjà rattaché à une entreprise.";
   if(/Invalid login credentials/i.test(m)) return "E-mail ou mot de passe incorrect.";
   if(/Email not confirmed/i.test(m)) return "Votre e-mail n'est pas encore confirmé : ouvrez le lien reçu par e-mail.";
@@ -63,11 +68,13 @@ async function loadData(){
     sb.from("camions").select("*").eq("entreprise_id",eid),
     sb.from("remorques").select("*").eq("entreprise_id",eid)
   ];
-  if(isStaff()) q.push(sb.from("membres").select("user_id,role,conducteur_id").eq("entreprise_id",eid));
+  if(isStaff()){ q.push(sb.from("membres").select("user_id,role,conducteur_id,derniere_connexion,appareil").eq("entreprise_id",eid));
+    q.push(sb.from("acces_conducteurs").select("code,conducteur_id,expire_le").eq("entreprise_id",eid)); }
   const r = await Promise.all(q);
   const bad = r.find(x=>x.error); if(bad){ toast(errMsg(bad.error)); }
   S.courses=(r[0].data||[]).map(fromDb); S.conducteurs=(r[1].data||[]).map(fromDb); S.camions=(r[2].data||[]).map(fromDb); S.remorques=(r[3].data||[]).map(fromDb);
   S.membres = r[4] ? (r[4].data||[]) : [];
+  S.acces = r[5] ? (r[5].data||[]).filter(a=>new Date(a.expire_le)>new Date()) : [];
   S.loaded=true; render();
 }
 let channel=null;
@@ -110,7 +117,7 @@ const aFacturer = c => c.statut==="terminee" && !c.facturee;
 
 /* ---------- navigation ---------- */
 const VIEWS = ["planning","courses","indicateurs","conducteur","parametres"];
-function readHash(){ const h=(location.hash||"").replace("#",""); S.view = VIEWS.includes(h)?h:"planning"; if(S.mem && !isStaff()) S.view="conducteur"; }
+function readHash(){ const h=(location.hash||"").replace("#",""); S.view = VIEWS.includes(h)?h:"planning"; if(MODE==="chauffeur" || (S.mem && !isStaff())) S.view="conducteur"; }
 window.addEventListener("hashchange",()=>{ readHash(); render(); window.scrollTo(0,0); });
 
 function renderNav(){
@@ -131,6 +138,7 @@ function renderNav(){
 
 function render(){
   const v=$("#view");
+  if(MODE==="chauffeur" && !S.recovery && (!S.session || !S.mem)){ $("#side").hidden=true; v.innerHTML=vCodeEntry(); return; }
   if(S.recovery || !S.session || !S.mem){ $("#side").hidden=true; v.innerHTML = S.recovery ? vRecovery() : (!S.session ? vAuth() : vOnboard()); return; }
   $("#side").hidden = !isStaff() || S.view==="conducteur";
   if(isStaff()) renderNav();
@@ -142,7 +150,22 @@ function render(){
 const after = {};
 
 /* ---------- CONNEXION ---------- */
-function authShell(inner){ return `<div class="auth"><div class="auth-card"><div class="logo"><img src="../logo-blanc.png" alt="Tonton Business"><b>Tonton Planning</b></div>${inner}</div></div>`; }
+function authShell(inner){ const img = MODE==="chauffeur" ? `<img src="icon-192.png" alt="" style="border-radius:12px">` : `<img src="../logo-blanc.png" alt="Tonton Business">`;
+  return `<div class="auth"><div class="auth-card"><div class="logo">${img}<b>${APPNAME}</b></div>${inner}</div></div>`; }
+function installTip(){
+  if(MODE!=="chauffeur" || standalone() || store.get("dc_tip")==="0") return "";
+  const ios=/iPhone|iPad/.test(navigator.userAgent||"");
+  return `<div class="job" style="gap:6px"><b>Installe Dream Chauffeur sur ton téléphone</b>
+    <span>${ios?"Dans <b>Safari</b> : bouton <b>Partager</b> (carré avec une flèche) → <b>« Sur l'écran d'accueil »</b> → Ajouter.":"Menu <b>⋮</b> du navigateur → <b>« Ajouter à l'écran d'accueil »</b> ou « Installer l'application »."}</span>
+    <span class="muted" style="font-size:13px">L'icône Dream Chauffeur apparaît avec tes autres applications : tu n'as plus qu'à l'ouvrir pour voir ton programme.</span>
+    <button type="button" class="linkbtn" data-act="hidetip" style="align-self:flex-start">C'est fait</button></div>`;
+}
+function vCodeEntry(){
+  return authShell(`<h1>Bienvenue</h1>
+    <p style="margin:0">Entre le <b>code d'invitation</b> reçu de ton exploitation (par SMS ou WhatsApp). Tu le fais une seule fois : ensuite, ton programme s'affiche dès que tu ouvres l'application.</p>
+    <form id="codeForm" style="display:flex;flex-direction:column;gap:10px"><label class="fld">Code d'invitation<input type="text" id="cCode" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" maxlength="14" style="text-transform:uppercase;letter-spacing:.15em;font-size:20px;text-align:center" required></label>
+    ${S.authErr?`<p class="err" style="margin:0">${esc(S.authErr)}</p>`:""}<button class="btn btn-accent big" type="submit">Valider</button></form>`);
+}
 function vAuth(){
   const m=S.authMode;
   if(m==="forgot") return authShell(`<h1>Mot de passe oublié</h1><p class="muted" style="margin:0">Indiquez votre e-mail : vous recevrez un lien pour choisir un nouveau mot de passe.</p>
@@ -151,7 +174,7 @@ function vAuth(){
     <button type="button" class="linkbtn" data-auth="login">Retour à la connexion</button>`);
   const signup = m==="signup";
   return authShell(`<h1>${signup?"Créer le compte de votre entreprise":"Connexion"}</h1>
-    <p class="muted" style="margin:0">${signup?"Pour l'exploitation (gérant, exploitant). Les conducteurs n'ont pas besoin de compte : ils reçoivent un lien d'accès.":"Espace exploitation. Conducteur ? Utilisez le lien d'accès envoyé par votre exploitation."}</p>
+    <p class="muted" style="margin:0">${signup?"Pour l'exploitation (gérant, exploitant). Les conducteurs n'ont pas besoin de compte : ils reçoivent un lien d'accès.":"Espace exploitation. Conducteur ? Utilisez l'application Dream Chauffeur et le code reçu de votre exploitation."}</p>
     <form id="authForm" style="display:flex;flex-direction:column;gap:10px">
       <label class="fld">E-mail<input type="email" id="aEmail" autocomplete="email" required></label>
       <label class="fld">Mot de passe<input type="password" id="aPass" autocomplete="${signup?"new-password":"current-password"}" minlength="8" required></label>
@@ -192,7 +215,10 @@ async function joinWithCode(code){
     let { data:{session} } = await sb.auth.getSession();
     if(!session){ const {data,error}=await sb.auth.signInAnonymously(); if(error) throw error; session=data.session; }
     const {error}=await sb.rpc("rejoindre_conducteur",{p_code:code}); if(error) throw error;
-    S.authErr=""; history.replaceState(null,"",location.pathname+"#conducteur"); await boot(); toast("Téléphone rattaché : bienvenue !");
+    S.authErr="";
+    // Dream Chauffeur : le code reste dans l'adresse, pour que l'icône installée sur l'écran d'accueil s'ouvre déjà connectée
+    history.replaceState(null,"",location.pathname+(MODE==="chauffeur"?"?code="+encodeURIComponent(code):"#conducteur"));
+    await boot(); toast("Téléphone rattaché : bienvenue !");
   }catch(err){ S.authErr=errMsg(err); await boot(); if(S.mem) toast(S.authErr); }
 }
 
@@ -495,7 +521,9 @@ function vDriver(){
   const me=condById(meId);
   const day = S.drvDay==="today"?todayIso():addDays(todayIso(),1);
   const sel = staff ? `<label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--side-muted)">Aperçu pour le conducteur<select id="meSel"><option value="">— Choisir —</option>${activeConds().map(k=>`<option value="${esc(k.id)}" ${S.me===k.id?"selected":""}>${esc(k.nom)}</option>`).join("")}</select></label>` : "";
-  const back = staff ? `<p class="muted" style="text-align:center;margin:0"><a href="#planning">Retour à l'exploitation</a></p>` : `<p class="muted" style="text-align:center;margin:0;font-size:12px"><button type="button" class="linkbtn" data-act="refresh">Actualiser</button></p>`;
+  const back = staff ? `<p class="muted" style="text-align:center;margin:0"><a href="${MODE==="chauffeur"?esc(CFG.appUrl):"#planning"}">Retour à l'exploitation</a></p>` : `<p class="muted" style="text-align:center;margin:0;font-size:12px"><button type="button" class="linkbtn" data-act="refresh">Actualiser</button></p>`;
+  const logo = MODE==="chauffeur" ? `<img src="icon-192.png" alt="Dream Chauffeur" style="width:38px;border-radius:9px">` : `<img src="../logo-blanc.png" alt="Tonton Business" style="width:38px">`;
+  const tip = staff ? "" : installTip();
   if(!me) return `<div class="drv"><div class="drv-head"><h1>Vue conducteur</h1>${staff?`<p style="margin:0;color:var(--side-muted)">Choisissez un conducteur pour voir son écran.</p>${sel}`:`<p style="margin:0">Votre fiche conducteur est introuvable. Contactez votre exploitation.</p>`}</div>${back}</div>`;
   const all=S.courses.filter(c=>c.conducteurId===me.id && c.enlDate===day && c.statut!=="annulee").sort((a,b)=>(toMin(a.enlHeure)||0)-(toMin(b.enlHeure)||0));
   const vis=all.filter(c=>["envoyee","en_cours","terminee"].includes(c.statut));
@@ -503,10 +531,11 @@ function vDriver(){
   const curId=(vis.find(c=>c.statut==="en_cours")||vis.find(c=>c.statut==="envoyee")||{}).id;
   const jobs=vis.map((c,i)=>jobHtml(c,i+1,c.id===curId)).join("");
   const veh = camName(me.camionId) ? camName(me.camionId)+(isTracteur(me.camionId)&&remName(camById(me.camionId)?.remorqueId)?" + "+remName(camById(me.camionId).remorqueId):"") : "";
-  return `<div class="drv"><div class="drv-head"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h1>Bonjour ${esc((me.nom||"").split(" ")[0])}</h1><img src="../logo-blanc.png" alt="Tonton Business" style="width:38px"></div>
+  return `<div class="drv"><div class="drv-head"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h1>Bonjour ${esc((me.nom||"").split(" ")[0])}</h1>${logo}</div>
     <span style="color:var(--side-muted)">${esc(frDate(day,{weekday:"long",day:"numeric",month:"long"}))}${veh?" · "+esc(veh):""}</span>
     <div class="seg" role="group" aria-label="Jour" style="align-self:flex-start"><button type="button" class="${S.drvDay==="today"?"on":""}" data-dday="today">Aujourd'hui</button><button type="button" class="${S.drvDay==="tomorrow"?"on":""}" data-dday="tomorrow">Demain</button></div>
     ${sel}</div>
+    ${tip}
     ${vis.length?jobs:`<div class="job"><b>Aucune course envoyée${S.drvDay==="today"?" pour aujourd'hui":" pour demain"}.</b><span class="muted">${staff&&hidden?`${hidden} course(s) prévue(s) mais pas encore envoyée(s).`:"Le planning apparaîtra ici dès que l'exploitation l'aura envoyé."}</span></div>`}
     <p class="muted" style="text-align:center;font-size:12px;margin:0">Chaque bouton envoie l'heure réelle à l'exploitation.</p>${back}</div>`;
 }
@@ -621,15 +650,23 @@ function vParams(){
   const rems=S.remorques.slice().sort((a,b)=>(a.immat||"").localeCompare(b.immat||""));
   const camOpt=sel=>`<option value="">—</option>`+cams.map(k=>`<option value="${esc(k.id)}" ${sel===k.id?"selected":""}>${esc(k.immat)}</option>`).join("");
   const remOpt=sel=>`<option value="">—</option>`+rems.map(k=>`<option value="${esc(k.id)}" ${sel===k.id?"selected":""}>${esc(k.immat)}</option>`).join("");
-  const linked=id=>S.membres.some(m=>m.conducteur_id===id);
+  const codeOf=id=>(S.acces||[]).find(a=>a.conducteur_id===id);
+  const fmtCode=c=>c.length>6?c.slice(0,5)+" "+c.slice(5):c;
+  const cnx=id=>{ const m=S.membres.find(x=>x.conducteur_id===id && x.role==="conducteur");
+    if(!m) return `<span class="muted">Jamais</span>`;
+    const quand = m.derniere_connexion ? new Date(m.derniere_connexion).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"}) : "Relié";
+    return `<span>${esc(quand)}</span>${m.appareil?`<div class="muted" style="font-size:12px">${esc(m.appareil)}</div>`:""}<button type="button" class="linkbtn" style="font-size:12px" data-unlink="${esc(id)}">Déconnecter</button>`; };
+  const codeCell=id=>{ const a=codeOf(id);
+    return a ? `<span class="num" style="font-weight:700;letter-spacing:.08em;user-select:all">${esc(fmtCode(a.code))}</span><div><button type="button" class="btn btn-accent btn-sm" data-acces="${esc(id)}" style="margin-top:4px">Envoyer par…</button></div>`
+             : `<button type="button" class="btn btn-ghost btn-sm" data-regen="${esc(id)}">Générer un code</button>`; };
   return `<div class="bar"><h1>Conducteurs, camions & remorques</h1></div>
   <section class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px"><h2 style="font-size:17px;color:var(--navy)">Entreprise</h2>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"><label class="fld" style="flex:1 1 260px">Nom affiché<input type="text" id="coIn" value="${esc(S.entreprise?.nom||"")}"></label><button type="button" class="btn btn-accent" data-act="saveco">Enregistrer</button></div></section>
   <section class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px"><h2 style="font-size:17px;color:var(--navy)">Conducteurs <span class="muted" style="font-size:13px;font-family:var(--text)">${conds.length}</span></h2>
-    <p class="muted" style="margin:0;font-size:13px">Chaque conducteur reçoit un <b>lien d'accès</b> personnel : il l'ouvre une fois sur son téléphone, sans créer de compte.</p>
-    <div class="tbl-wrap"><table><thead><tr><th>Nom</th><th>Téléphone</th><th>Véhicule habituel</th><th>Actif</th><th>Téléphone relié</th><th></th></tr></thead><tbody>
-    ${conds.map(k=>`<tr><td><input type="text" id="cn_${esc(k.id)}" value="${esc(k.nom||"")}" aria-label="Nom"></td><td><input type="tel" id="ct_${esc(k.id)}" value="${esc(k.tel||"")}" aria-label="Téléphone"></td><td><select id="cc_${esc(k.id)}" aria-label="Véhicule habituel">${camOpt(k.camionId)}</select></td><td><input type="checkbox" id="ca_${esc(k.id)}" ${k.actif!==false?"checked":""} aria-label="Actif" style="width:20px;height:20px"></td><td>${linked(k.id)?'<span class="chip st-terminee">Oui</span>':'<span class="chip st-a_planifier">Non</span>'}</td><td style="white-space:nowrap"><button type="button" class="btn btn-accent btn-sm" data-acces="${esc(k.id)}">Lien d'accès</button> <button type="button" class="btn btn-ghost btn-sm" data-savecond="${esc(k.id)}">Enregistrer</button> <button type="button" class="btn btn-ghost btn-sm" data-delcond="${esc(k.id)}">Supprimer</button></td></tr>`).join("")}
-    <tr><td><input type="text" id="cn_new" placeholder="Nouveau conducteur" aria-label="Nom du nouveau conducteur"></td><td><input type="tel" id="ct_new" placeholder="06…" aria-label="Téléphone"></td><td><select id="cc_new" aria-label="Véhicule habituel">${camOpt("")}</select></td><td></td><td></td><td><button type="button" class="btn btn-accent btn-sm" data-act="addcond">Ajouter</button></td></tr>
+    <p class="muted" style="margin:0;font-size:13px">Chaque conducteur installe l'application <b>Dream Chauffeur</b> avec son <b>code d'invitation</b> (envoyé par WhatsApp ou SMS). Il voit ensuite son programme dès qu'il ouvre l'application, sans compte ni mot de passe.</p>
+    <div class="tbl-wrap"><table><thead><tr><th>Nom</th><th>Téléphone</th><th>Véhicule habituel</th><th>Actif</th><th>Code d'invitation</th><th>Dernière connexion</th><th></th></tr></thead><tbody>
+    ${conds.map(k=>`<tr><td><input type="text" id="cn_${esc(k.id)}" value="${esc(k.nom||"")}" aria-label="Nom"></td><td><input type="tel" id="ct_${esc(k.id)}" value="${esc(k.tel||"")}" aria-label="Téléphone"></td><td><select id="cc_${esc(k.id)}" aria-label="Véhicule habituel">${camOpt(k.camionId)}</select></td><td><input type="checkbox" id="ca_${esc(k.id)}" ${k.actif!==false?"checked":""} aria-label="Actif" style="width:20px;height:20px"></td><td style="white-space:nowrap">${codeCell(k.id)}</td><td style="white-space:nowrap">${cnx(k.id)}</td><td style="white-space:nowrap"><button type="button" class="btn btn-ghost btn-sm" data-savecond="${esc(k.id)}">Enregistrer</button> <button type="button" class="btn btn-ghost btn-sm" data-delcond="${esc(k.id)}">Supprimer</button></td></tr>`).join("")}
+    <tr><td><input type="text" id="cn_new" placeholder="Nouveau conducteur" aria-label="Nom du nouveau conducteur"></td><td><input type="tel" id="ct_new" placeholder="06…" aria-label="Téléphone"></td><td><select id="cc_new" aria-label="Véhicule habituel">${camOpt("")}</select></td><td></td><td></td><td></td><td><button type="button" class="btn btn-accent btn-sm" data-act="addcond">Ajouter</button></td></tr>
     </tbody></table></div></section>
   <section class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px"><h2 style="font-size:17px;color:var(--navy)">Camions et tracteurs <span class="muted" style="font-size:13px;font-family:var(--text)">${cams.length}</span></h2>
     <div class="tbl-wrap"><table><thead><tr><th>Immatriculation</th><th>Type</th><th>Remorque habituelle</th><th>Actif</th><th></th></tr></thead><tbody>
@@ -642,32 +679,41 @@ function vParams(){
     <tr><td><input type="text" id="ri_new" placeholder="AB-123-CD" aria-label="Immatriculation de la nouvelle remorque"></td><td></td><td></td><td><button type="button" class="btn btn-accent btn-sm" data-act="addrem">Ajouter</button></td></tr>
     </tbody></table></div></section>`;
 }
-async function showAcces(condId){
+async function showAcces(condId, regen){
   const k=condById(condId); if(!k) return;
-  const {data:code,error}=await sb.rpc("generer_acces",{p_conducteur:condId});
-  if(error){ toast(errMsg(error)); return; }
-  const link=CFG.appUrl+"?code="+encodeURIComponent(code);
+  let code=(S.acces||[]).find(a=>a.conducteur_id===condId)?.code;
+  if(regen || !code){
+    const {data,error}=await sb.rpc("generer_acces",{p_conducteur:condId});
+    if(error){ toast(errMsg(error)); return; }
+    code=data; S.acces=(S.acces||[]).filter(a=>a.conducteur_id!==condId).concat([{code,conducteur_id:condId,expire_le:new Date(Date.now()+365*864e5).toISOString()}]);
+    if(S.view==="parametres") render();
+  }
+  const link=CHAUFFEUR_URL+"?code="+encodeURIComponent(code);
+  const shown=code.length>6?code.slice(0,5)+" "+code.slice(5):code;
   const digits=(k.tel||"").replace(/\D/g,"");
   const intl = /^0\d{9}$/.test(digits) ? "33"+digits.slice(1) : (/^33\d{9}$/.test(digits) ? digits : "");
-  const msg = `Bonjour ${(k.nom||"").split(" ")[0]}, voici ton accès à Tonton Planning pour voir tes courses : ${link}`;
+  const prenom=(k.nom||"").split(" ")[0];
+  const msg = `Bonjour ${prenom}, voici ton application Dream Chauffeur pour voir ton programme de courses : ${link}\n\nTon code d'invitation : ${shown}\n\nSur iPhone, ouvre le lien avec Safari puis Partager → « Sur l'écran d'accueil » pour avoir l'icône.`;
   const envoiBtns = intl
-    ? `<div class="two"><a class="btn" style="background:#25D366;color:#0B2E17" href="https://wa.me/${intl}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Envoyer par WhatsApp</a><a class="btn btn-navy" href="sms:+${intl}?&body=${encodeURIComponent(msg)}">Envoyer par SMS</a></div><p class="muted" style="margin:0;font-size:12px">Le message s'ouvre déjà rempli : il ne reste qu'à appuyer sur Envoyer. Le SMS fonctionne surtout depuis un téléphone.</p>`
+    ? `<div class="two"><a class="btn" style="background:#25D366;color:#0B2E17" href="https://wa.me/${intl}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">WhatsApp</a><a class="btn btn-navy" href="sms:+${intl}?&body=${encodeURIComponent(msg)}">SMS</a></div><p class="muted" style="margin:0;font-size:12px">Le message s'ouvre déjà rempli pour ${esc(k.tel)} : il ne reste qu'à appuyer sur Envoyer. Le SMS fonctionne surtout depuis un téléphone.</p>`
     : `<p class="muted" style="margin:0;font-size:13px">Ajoutez le numéro de téléphone du conducteur pour l'envoyer directement par WhatsApp ou SMS.</p>`;
   let qrSvg=""; try{ const q=window.qrcode(0,"M"); q.addData(link); q.make(); qrSvg=q.createSvgTag({cellSize:5,margin:2,scalable:true}); }catch(e){}
-  openModal(`<h2>Lien d'accès de ${esc(k.nom)}</h2>
-    <p style="margin:0">Le conducteur ouvre ce lien <b>une fois</b> sur son téléphone (ou scanne le QR code). Il arrive ensuite directement sur ses courses. Valable 7 jours, utilisable une seule fois.</p>
-    ${qrSvg?`<div class="qr" role="img" aria-label="QR code du lien d'accès">${qrSvg}</div>`:""}
-    <div class="code">${esc(code)}</div>
-    <label class="fld">Lien à envoyer par SMS ou WhatsApp<input type="text" id="accLink" value="${esc(link)}" readonly></label>
+  openModal(`<h2>Envoyer Dream Chauffeur à ${esc(k.nom)}</h2>
+    <div class="code">${esc(shown)}</div>
+    <p style="margin:0">Code d'invitation de ${esc(prenom)}. Il ouvre le lien (ou scanne le QR code) puis l'application s'ouvre directement sur son programme. S'il change de téléphone, il lui suffit de saisir à nouveau ce code.</p>
+    <b style="font-size:14px">Envoyer par…</b>
     ${envoiBtns}
-    <div class="row-btns"><button type="button" class="btn btn-ghost" data-act="close">Fermer</button><button type="button" class="btn btn-ghost" data-copy="#accLink">Copier le lien</button></div>
-    <p class="muted" style="margin:0;font-size:12px">Un nouveau lien déconnecte l'ancien téléphone du conducteur. Astuce : sur le téléphone, « Ajouter à l'écran d'accueil » crée une icône Tonton Planning.</p>`);
+    ${qrSvg?`<div class="qr" role="img" aria-label="QR code de l'application Dream Chauffeur">${qrSvg}</div>`:""}
+    <label class="fld">Lien de l'application<input type="text" id="accLink" value="${esc(link)}" readonly></label>
+    <textarea id="accMsg" hidden>${esc(msg)}</textarea>
+    <div class="row-btns"><button type="button" class="btn btn-ghost" data-regen="${esc(condId)}" data-confirm="1" style="margin-right:auto">Nouveau code</button><button type="button" class="btn btn-ghost" data-copy="#accMsg">Copier le message</button><button type="button" class="btn btn-accent" data-act="close">Fermer</button></div>
+    <p class="muted" style="margin:0;font-size:12px">« Nouveau code » annule l'ancien : à utiliser seulement si le code a été envoyé à la mauvaise personne. Pour retirer l'accès d'un téléphone, utilisez « Déconnecter » dans la liste.</p>`);
 }
 
 /* ---------- clics globaux ---------- */
 document.addEventListener("click",async e=>{
   if(e.target.id==="mbg"){ closeModal(); return; }
-  const el=e.target.closest("[data-act],[data-open],[data-day],[data-mode],[data-repos],[data-fst],[data-fper],[data-drv],[data-dday],[data-impedit],[data-impdel],[data-savecond],[data-delcond],[data-savecam],[data-delcam],[data-saverem],[data-delrem],[data-auth],[data-acces],[data-copy],[data-doc]");
+  const el=e.target.closest("[data-act],[data-open],[data-day],[data-mode],[data-repos],[data-fst],[data-fper],[data-drv],[data-dday],[data-impedit],[data-impdel],[data-savecond],[data-delcond],[data-savecam],[data-delcam],[data-saverem],[data-delrem],[data-auth],[data-acces],[data-regen],[data-unlink],[data-copy],[data-doc]");
   if(!el) return;
   const d=el.dataset;
   if(d.auth){ S.authMode=d.auth; S.authErr=""; render(); return; }
@@ -686,7 +732,12 @@ document.addEventListener("click",async e=>{
   else if(d.act==="addcam"){ const im=$("#vi_new").value.trim().toUpperCase(); if(!im){ toast("Indiquez l'immatriculation."); return; } if(await tableWrite("camions","insert",null,{immat:im,type:$("#vt_new").value.trim()||null,actif:true})) toast("Camion ajouté"); }
   else if(d.act==="addrem"){ const im=$("#ri_new").value.trim().toUpperCase(); if(!im){ toast("Indiquez l'immatriculation."); return; } if(await tableWrite("remorques","insert",null,{immat:im,actif:true})) toast("Remorque ajoutée"); }
   else if(d.acces){ showAcces(d.acces); }
-  else if(d.copy){ const inp=$(d.copy); try{ await navigator.clipboard.writeText(inp.value); toast("Lien copié"); }catch(err){ inp.select(); toast("Sélectionné : faites Ctrl+C"); } }
+  else if(d.regen){ if(d.confirm && !el.dataset.ok){ el.dataset.ok="1"; el.textContent="Confirmer : nouveau code"; el.classList.add("btn-danger"); return; } showAcces(d.regen,true); }
+  else if(d.unlink){ if(!el.dataset.ok){ el.dataset.ok="1"; el.textContent="Confirmer la déconnexion"; el.style.color="var(--danger)"; return; }
+    const {error}=await sb.from("membres").delete().eq("entreprise_id",EID()).eq("conducteur_id",d.unlink).eq("role","conducteur");
+    if(error){ toast(errMsg(error)); return; } toast("Téléphone déconnecté"); loadData(); }
+  else if(d.act==="hidetip"){ store.set("dc_tip","0"); render(); }
+  else if(d.copy){ const inp=$(d.copy); try{ await navigator.clipboard.writeText(inp.value); toast("Copié : collez-le dans WhatsApp ou SMS"); }catch(err){ const l=$("#accLink"); l&&l.select(); toast("Copie impossible ici : sélectionnez le lien"); } }
   else if(d.doc){ openDoc(d.doc); }
   else if(d.savecond){ const id=d.savecond; if(await tableWrite("conducteurs","update",id,{nom:$("#cn_"+id).value.trim(),tel:$("#ct_"+id).value.trim()||null,camionId:$("#cc_"+id).value||null,actif:$("#ca_"+id).checked})) toast("Conducteur enregistré"); }
   else if(d.delcond||d.delcam||d.delrem){ const [t,id]=d.delcond?["conducteurs",d.delcond]:d.delcam?["camions",d.delcam]:["remorques",d.delrem];
@@ -723,14 +774,22 @@ async function boot(){
     const {data,error}=await sb.from("membres").select("entreprise_id,role,conducteur_id").eq("user_id",session.user.id).limit(1);
     if(!error && data && data[0]){ S.mem=data[0];
       const {data:ent}=await sb.from("entreprises").select("id,nom").eq("id",S.mem.entreprise_id).single(); S.entreprise=ent||{nom:""};
-      readHash(); render(); await loadData(); subscribe(); return; }
+      readHash(); render(); signaler(); await loadData(); subscribe(); return; }
   }
   render();
 }
+let lastSignal=0;
+function signaler(){ // « Dernière connexion » visible par l'exploitation
+  if(!S.mem || S.mem.role!=="conducteur" || Date.now()-lastSignal<10*60000) return;
+  lastSignal=Date.now(); sb.rpc("signaler_connexion",{p_appareil:appareil()}).then(()=>{},()=>{});
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") signaler(); });
 sb.auth.onAuthStateChange((event)=>{ if(event==="PASSWORD_RECOVERY"){ S.recovery=true; render(); } });
 (async()=>{
   const params=new URLSearchParams(location.search);
   const code=params.get("code");
+  if(code && MODE==="chauffeur"){ // icône installée : déjà rattaché → on ouvre directement le programme
+    await boot(); if(!S.mem) await joinWithCode(code); return; }
   if(code){ history.replaceState(null,"",location.pathname); await joinWithCode(code); return; }
   await boot();
 })();
