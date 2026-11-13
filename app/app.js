@@ -179,6 +179,7 @@ document.addEventListener("submit", async e=>{
       if(S.authMode==="signup"){ const {data,error}=await sb.auth.signUp({email,password:pass,options:{emailRedirectTo:CFG.appUrl}}); if(error) throw error;
         if(!data.session){ S.authMode="login"; S.authErr=""; render(); toast("Compte créé : confirmez votre e-mail puis connectez-vous."); return; } }
       else { const {error}=await sb.auth.signInWithPassword({email,password:pass}); if(error) throw error; }
+      S.authErr=""; await boot(); return;
     }catch(err){ S.authErr=errMsg(err); render(); }
     finally{ btn.disabled=false; } }
   if(f.id==="recForm"){ e.preventDefault(); const {error}=await sb.auth.updateUser({password:$("#rPass").value}); if(error){ S.authErr=errMsg(error); render(); return; } S.recovery=false; S.authErr=""; toast("Mot de passe modifié"); await boot(); }
