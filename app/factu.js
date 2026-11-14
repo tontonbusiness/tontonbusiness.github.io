@@ -63,7 +63,7 @@ T.nav = () => {
     sub("en_cours","En cours",cnt("en_cours"))+sub("terminee","Terminés",cnt("terminee"))+L("conducteur","Vue conducteur")+
     `<span class="grp">FACTURATION</span>`+L("devis","Devis")+L("factures","Facturation de ventes")+
     subv("afacturer","Transports à facturer",F.ready?aFact().length:0,true)+subv("factures","Factures",nb("facture"))+subv("relances","Relances clients",F.pieces.filter(enRetard).length,true)+subv("avoirs","Avoirs",nb("avoir"))+
-    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+L("reglages","Paramètres");
+    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+subv("echvehicules","Contrôles véhicules",echCompte("v"),true)+subv("echchauffeurs","Documents chauffeurs",echCompte("c"),true)+L("reglages","Paramètres");
 };
 
 /* ---------- À FACTURER ---------- */
@@ -138,6 +138,35 @@ function listView(type){
 T.views.factures = () => listView("facture");
 T.views.avoirs = () => listView("avoir");
 T.views.devis = () => listView("devis");
+
+/* ---------- ÉCHÉANCES : contrôles des véhicules, documents des chauffeurs ---------- */
+const ECH = { v:[["ct","Contrôle technique"],["limiteur","Limiteur de vitesse"],["chrono","Contrôle chronotachygraphe"]],
+              r:[["ct","Contrôle technique"]],
+              c:[["permis","Permis de conduire"],["carte","Carte conducteur"],["fimo","FIMO / FCO"],["visite","Visite médicale"]] };
+const SEUIL = 30; // jours avant l'échéance où l'on prévient
+const jours = d => Math.round((new Date(d+"T00:00:00") - new Date(todayIso()+"T00:00:00"))/864e5);
+const echEtat = d => { if(!d) return {k:"vide",txt:"À renseigner"}; const j=jours(d); return j<0 ? {k:"exp",txt:`Expiré depuis ${-j} j`} : j<=SEUIL ? {k:"bientot",txt:j===0?"Expire aujourd'hui":`Expire dans ${j} j`} : {k:"ok",txt:"Valide"}; };
+const echSrc = () => [ ...S.camions.filter(x=>x.actif!==false).map(x=>({t:"camions",g:"v",o:x,nom:x.immat,defs:ECH.v})), ...S.remorques.filter(x=>x.actif!==false).map(x=>({t:"remorques",g:"v",o:x,nom:x.immat,defs:ECH.r})), ...S.conducteurs.filter(x=>x.actif!==false).map(x=>({t:"conducteurs",g:"c",o:x,nom:x.nom,defs:ECH.c})) ];
+const echListe = g => echSrc().filter(e=>e.g===g).flatMap(e=>e.defs.map(([k,l])=>({nom:e.nom,l,d:(e.o.echeances||{})[k]||"",e:echEtat((e.o.echeances||{})[k])})));
+function echCompte(g){ return echListe(g).filter(x=>x.e.k==="exp"||x.e.k==="bientot").length; }
+T.planAlerts = () => { const out=[]; [["v","véhicules","echvehicules"],["c","chauffeurs","echchauffeurs"]].forEach(([g,nom,v])=>{ const L=echListe(g); const ex=L.filter(x=>x.e.k==="exp"), bi=L.filter(x=>x.e.k==="bientot"); if(!ex.length&&!bi.length) return;
+    const detail=ex.concat(bi).slice(0,3).map(x=>`${esc(x.nom)} — ${esc(x.l)} (${esc(x.e.txt.toLowerCase())})`).join(" · ");
+    out.push(`<div class="alert" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between"><span><b>Échéances ${nom} :</b> ${ex.length?ex.length+" dépassée"+(ex.length>1?"s":""):""}${ex.length&&bi.length?", ":""}${bi.length?bi.length+" à renouveler sous "+SEUIL+" jours":""}. ${detail}${ex.length+bi.length>3?"…":""}</span><a class="btn btn-ghost btn-sm" href="#${v}">Voir</a></div>`); });
+  return out; };
+function echCell(t,o,k,l){ const d=(o.echeances||{})[k]||""; const e=echEtat(d); const cls={exp:"late",bientot:"",ok:"st-terminee",vide:"st-a_planifier"}[e.k]; const st=e.k==="bientot"?' style="border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)"':"";
+  return `<td><input type="date" class="fin" style="max-width:160px" id="ech_${esc(o.id)}_${k}" data-ech="${t}" data-id="${esc(o.id)}" data-k="${k}" value="${esc(d)}" aria-label="${esc(l)} — ${esc(o.immat||o.nom||"")}"><div style="margin-top:4px"><span class="chip ${cls}"${st}>${e.txt}</span></div></td>`; }
+function echView(g){
+  const L=echListe(g); const n=k=>L.filter(x=>x.e.k===k).length;
+  const kp=`<div class="kpis"><div class="kpi ${n("exp")?"bad":""}"><small>Expirés</small><b class="num">${n("exp")}</b></div><div class="kpi ${n("bientot")?"warn":""}"><small>À renouveler sous ${SEUIL} jours</small><b class="num">${n("bientot")}</b></div><div class="kpi"><small>Valides</small><b class="num">${n("ok")}</b></div><div class="kpi"><small>À renseigner</small><b class="num">${n("vide")}</b></div></div>`;
+  const table=(titre,rows,defs,t,col)=> rows.length ? `<div class="pan"><h2>${titre}</h2><div class="tbl-wrap"><table><thead><tr><th>${col}</th>${defs.map(([,l])=>`<th>${l}</th>`).join("")}</tr></thead><tbody>${rows.map(o=>`<tr><td><b>${esc(o.immat||o.nom)}</b>${o.type?`<div class="muted">${esc(o.type)}</div>`:""}</td>${defs.map(([k,l])=>echCell(t,o,k,l)).join("")}</tr>`).join("")}</tbody></table></div></div>` : "";
+  const act=x=>x.actif!==false;
+  if(g==="v") return `<div class="bar"><h1>Contrôles véhicules</h1></div><span class="muted" style="font-size:13px">Saisissez la date de fin de validité de chaque contrôle : elle s'enregistre toute seule. Une alerte apparaît sur le planning ${SEUIL} jours avant l'échéance, puis quand elle est dépassée.</span>${kp}
+    ${table("Camions et tracteurs",S.camions.filter(act),ECH.v,"camions","Immatriculation")}${table("Remorques",S.remorques.filter(act),ECH.r,"remorques","Immatriculation")}${S.camions.length+S.remorques.length?"":`<div class="pan"><div class="empty">Ajoutez d'abord vos véhicules dans « Conducteurs et véhicules ».</div></div>`}`;
+  return `<div class="bar"><h1>Documents chauffeurs</h1></div><span class="muted" style="font-size:13px">Saisissez la date de fin de validité de chaque document : elle s'enregistre toute seule. Une alerte apparaît sur le planning ${SEUIL} jours avant l'échéance, puis quand elle est dépassée.</span>${kp}
+    ${table("Conducteurs",S.conducteurs.filter(act),ECH.c,"conducteurs","Conducteur")||`<div class="pan"><div class="empty">Ajoutez d'abord vos conducteurs dans « Conducteurs et véhicules ».</div></div>`}`;
+}
+T.views.echvehicules = () => echView("v");
+T.views.echchauffeurs = () => echView("c");
 
 /* ---------- RELANCES CLIENTS ---------- */
 function retardsParClient(){ const g={}; F.pieces.filter(enRetard).forEach(p=>{ const k=p.client_id||"?"; (g[k]=g[k]||[]).push(p); });
@@ -235,7 +264,7 @@ function drawEditor(){
       <td><input class="fin num" type="number" step="0.1" min="0" data-fl="tva" data-i="${i}" value="${esc(l.tva??"")}" aria-label="Taux de TVA"></td>
       <td class="num" style="text-align:right" id="fLt${i}">${money(r2((Number(l.qte)||0)*(Number(l.pu)||0)))}</td>
       <td><button type="button" class="linkbtn" data-f="delline" data-i="${i}">Retirer</button></td></tr>`).join("")}</tbody></table></div>
-    <div class="bar"><button type="button" class="btn btn-ghost btn-sm" data-f="addline">+ Ajouter une ligne libre</button>${p.type==="facture"?addCourseSel(p):""}<span style="flex:1"></span><div class="tot" id="fTot">${totHtml(t)}</div></div>
+    <div class="bar"><button type="button" class="btn btn-ghost btn-sm" data-f="addline">+ Ajouter une ligne libre</button>${p.type==="facture"?addCourseSel(p):""}${(F.param.facturation.produits||[]).length?`<select class="fin" id="fAddProd" style="width:auto;max-width:260px" aria-label="Ajouter un produit du catalogue"><option value="">+ Ajouter un produit du catalogue…</option>${F.param.facturation.produits.map((x,i)=>`<option value="${i}">${esc(x.nom)}${x.prix?" · "+money(x.prix):""}</option>`).join("")}</select>`:""}<span style="flex:1"></span><div class="tot" id="fTot">${totHtml(t)}</div></div>
     <label class="fld">Texte libre sur le document (facultatif)<textarea class="fin" id="fNotes" rows="2">${esc(p.notes||"")}</textarea></label>
     <div id="fConfirm"></div>
     <div class="row-btns"><button type="button" class="btn btn-danger" data-f="del" style="margin-right:auto">Supprimer le brouillon</button><button type="button" class="btn btn-ghost" data-act="close">Fermer</button><button type="button" class="btn btn-ghost" data-f="preview">Aperçu</button><button type="button" class="btn btn-navy" data-f="save">Enregistrer</button><button type="button" class="btn btn-accent" data-f="askfin">Finaliser</button></div></div>`);
@@ -301,12 +330,21 @@ T.views.reglages = () => {
     <label class="fld">Pied de page libre (facultatif)<input class="fin" id="fa_pied" value="${esc(fa.pied||"")}"></label>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" id="fa_tva_debits" ${fa.tva_debits?"checked":""} style="width:18px;height:18px">Afficher « TVA acquittée sur les débits »</label>
     <div class="row-btns"><button type="button" class="btn btn-accent" data-f="psave">Enregistrer la facturation</button></div></div>
+  <div class="pan"><h2>Catalogue de produits</h2><span class="muted" style="font-size:13px">Vos prestations habituelles (attente, immobilisation, mise à disposition, surcharge carburant…). Elles s'ajoutent en un clic dans un devis ou une facture, avec leur prix et leur TVA.</span>
+    <div class="tbl-wrap"><table class="lines"><thead><tr><th style="min-width:220px">Nom du produit</th><th style="width:130px">Prix unitaire HT</th><th style="width:90px">TVA %</th><th style="width:150px">Code comptable</th><th></th></tr></thead><tbody id="prBody">${prodRows()}</tbody></table></div>
+    <div class="row-btns"><button type="button" class="btn btn-ghost" data-f="pradd" style="margin-right:auto">+ Ajouter un produit</button><button type="button" class="btn btn-accent" data-f="prsave">Enregistrer le catalogue</button></div></div>
   <div class="pan"><h2>Numérotation</h2><span class="muted" style="font-size:13px">Les numéros se suivent sans trou, par type et par année. Si vous facturiez déjà avec un autre outil cette année, indiquez ici le prochain numéro pour continuer votre suite. Un numéro ne peut jamais revenir en arrière.</span>
     <div class="tbl-wrap"><table><thead><tr><th>Type</th><th>Prochain numéro</th><th>Reprendre à partir du n°</th><th></th></tr></thead><tbody>${["facture","avoir","devis"].map(t=>`<tr><td>${LAB[t].pl}</td><td><b>${esc(next(t).txt)}</b></td><td><input class="fin num" type="number" min="${next(t).n+1}" id="cp_${t}" style="max-width:140px" aria-label="Prochain numéro pour ${LAB[t].pl}"></td><td><button type="button" class="btn btn-ghost btn-sm" data-f="compteur" data-type="${t}">Appliquer</button></td></tr>`).join("")}</tbody></table></div></div>`;
 };
+function prodRows(){ if(!F.prods) F.prods=JSON.parse(JSON.stringify(F.param.facturation.produits||[]));
+  return F.prods.length ? F.prods.map((x,i)=>`<tr><td><input class="fin" data-pr="nom" data-i="${i}" value="${esc(x.nom||"")}" aria-label="Nom du produit"></td><td><input class="fin num" type="number" step="0.01" data-pr="prix" data-i="${i}" value="${esc(x.prix??"")}" aria-label="Prix unitaire hors taxes"></td><td><input class="fin num" type="number" step="0.1" min="0" data-pr="tva" data-i="${i}" value="${esc(x.tva??"")}" placeholder="${tvaDef()}" aria-label="Taux de TVA"></td><td><input class="fin" data-pr="code" data-i="${i}" value="${esc(x.code||"")}" aria-label="Code comptable"></td><td><button type="button" class="linkbtn" data-f="prdel" data-i="${i}">Retirer</button></td></tr>`).join("")
+    : `<tr><td colspan="5"><div class="empty">Aucun produit pour l'instant.</div></td></tr>`; }
+async function saveProds(){ const L=(F.prods||[]).map(x=>({nom:String(x.nom||"").trim(),prix:x.prix===""||x.prix==null?null:Number(x.prix),tva:x.tva===""||x.tva==null?null:Number(x.tva),code:String(x.code||"").trim()||null})).filter(x=>x.nom);
+  const {error}=await sb.from("parametres").upsert({entreprise_id:EID(),societe:F.param.societe,facturation:Object.assign({},F.param.facturation,{produits:L})},{onConflict:"entreprise_id"});
+  if(error){ toast(fErr(error)); return; } F.prods=null; toast("Catalogue enregistré"); reload(); }
 async function saveParam(){
   const societe={}; SO.forEach(([k])=>{ const v=$("#so_"+k).value.trim(); if(v) societe[k]=v; });
-  const fa={}; ["tva","delai_paiement","prefixe_facture","prefixe_avoir","prefixe_devis","penalites","pied"].forEach(k=>{ const v=$("#fa_"+k).value.trim(); if(v!=="") fa[k]=v; }); fa.tva_debits=$("#fa_tva_debits").checked;
+  const fa={}; ["tva","delai_paiement","prefixe_facture","prefixe_avoir","prefixe_devis","penalites","pied"].forEach(k=>{ const v=$("#fa_"+k).value.trim(); if(v!=="") fa[k]=v; }); fa.tva_debits=$("#fa_tva_debits").checked; fa.produits=F.param.facturation.produits||[];
   if(fa.tva!==undefined && !(Number(fa.tva)>=0 && Number(fa.tva)<=100)){ toast("Le taux de TVA doit être compris entre 0 et 100."); return; }
   if(fa.delai_paiement!==undefined && !(Number(fa.delai_paiement)>=0 && Number(fa.delai_paiement)<=90)){ toast("Le délai de paiement doit être compris entre 0 et 90 jours."); return; }
   const {error}=await sb.from("parametres").upsert({entreprise_id:EID(),societe,facturation:fa},{onConflict:"entreprise_id"});
@@ -362,16 +400,28 @@ document.addEventListener("click", async e=>{
   else if(a==="cdel"){ if(!el.dataset.ok){ el.dataset.ok="1"; el.textContent="Confirmer la suppression"; return; } const {error}=await sb.from("clients").delete().eq("id",F.clientId); if(error){ toast(fErr(error)); return; } closeModal(); toast("Client supprimé"); reload(); }
   else if(a==="carch"){ const c=clientById(F.clientId); const {error}=await sb.from("clients").update({actif:c.actif===false}).eq("id",c.id); if(error){ toast(fErr(error)); return; } closeModal(); toast(c.actif===false?"Client réactivé":"Client archivé"); reload(); }
   else if(a==="psave"){ saveParam(); }
+  else if(a==="pradd"){ F.prods.push({nom:"",prix:"",tva:"",code:""}); $("#prBody").innerHTML=prodRows(); const all=document.querySelectorAll('[data-pr="nom"]'); all[all.length-1]?.focus(); }
+  else if(a==="prdel"){ F.prods.splice(Number(d.i),1); $("#prBody").innerHTML=prodRows(); }
+  else if(a==="prsave"){ saveProds(); }
   else if(a==="compteur"){ const v=Number($("#cp_"+d.type).value); if(!v){ toast("Indiquez le prochain numéro."); return; } const {error}=await sb.rpc("regler_compteur",{p_type:d.type,p_prochain:v}); if(error){ toast(fErr(error)); return; } toast("Numérotation mise à jour"); reload(); }
 });
 document.addEventListener("input", e=>{
-  const el=e.target; if(!el.dataset || !el.dataset.fl || !F.draft) return;
+  const el=e.target; if(el.dataset && el.dataset.pr && F.prods && F.prods[Number(el.dataset.i)]){ F.prods[Number(el.dataset.i)][el.dataset.pr]=el.value; return; } if(!el.dataset || !el.dataset.fl || !F.draft) return;
   const l=F.draft.lignes[Number(el.dataset.i)]; if(!l) return;
   l[el.dataset.fl] = el.dataset.fl==="designation" ? el.value : (el.value===""?"":Number(el.value));
   const c=$("#fLt"+el.dataset.i); if(c) c.textContent=money(r2((Number(l.qte)||0)*(Number(l.pu)||0)));
   const t=$("#fTot"); if(t) t.innerHTML=totHtml(totals(F.draft.lignes));
 });
-document.addEventListener("change", e=>{
+document.addEventListener("change", async e=>{
+  const de=e.target.dataset||{};
+  if(de.ech){ const liste=S[de.ech]; const o=liste&&liste.find(x=>x.id===de.id); if(!o) return;
+    const ech=Object.assign({},o.echeances||{}); if(e.target.value) ech[de.k]=e.target.value; else delete ech[de.k];
+    const {error}=await sb.from(de.ech).update({echeances:ech}).eq("id",o.id);
+    if(error){ toast(/echeances/.test(error.message||"")?"Les échéances ne sont pas encore activées sur cette base.":fErr(error)); e.target.value=(o.echeances||{})[de.k]||""; return; }
+    o.echeances=ech; const id=e.target.id; toast("Date enregistrée"); render(); const again=document.getElementById(id); again&&again.focus(); return; }
+  if(e.target.id==="fAddProd" && F.draft && e.target.value!==""){ const pr=(F.param.facturation.produits||[])[Number(e.target.value)]; if(!pr) return; readDraft();
+    const vide=F.draft.lignes.length===1 && !String(F.draft.lignes[0].designation||"").trim() && !Number(F.draft.lignes[0].pu); if(vide) F.draft.lignes=[];
+    F.draft.lignes.push({designation:pr.nom,qte:1,pu:Number(pr.prix)||0,tva:pr.tva===""||pr.tva==null?tvaDef():Number(pr.tva)}); drawEditor(); return; }
   if(e.target.id==="rNiv" && F.relance){ const g=retardsParClient().find(x=>x.id===F.relance.id); if(g){ const m=relanceMsg(g,Number(e.target.value)); $("#rObj").value=m.objet; $("#rTxt").value=m.corps; } return; }
   if(e.target.id!=="fAddCourse" || !F.draft || !e.target.value) return;
   const c=S.courses.find(x=>x.id===e.target.value); if(!c) return;

@@ -262,6 +262,7 @@ function vPlanning(){
   const conds = activeConds(), cams = activeCams();
   const rowsSrc = S.mode==="conducteur" ? conds : cams;
   const alerts=[];
+  if(X.planAlerts) alerts.push(...X.planAlerts());
   S.courses.filter(c=>incNew(c).length).slice(0,8).forEach(c=>incNew(c).forEach(i=>alerts.push(`<div class="alert" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between"><span><b>Problème signalé${i.heure?" à "+esc(i.heure):""} :</b> ${esc(INC[i.type]||"Autre")} — ${esc(condById(c.conducteurId)?.nom||"Conducteur")} · ${esc(c.donneur||"")}${i.commentaire?" — "+esc(i.commentaire):""}</span><button type="button" class="btn btn-ghost btn-sm" data-open="${esc(c.id)}">Ouvrir la course</button></div>`)));
   const rowsHtml = rowsSrc.map(r=>{
     const mine = day.filter(c=>(S.mode==="conducteur"?c.conducteurId:c.camionId)===r.id && c.statut!=="a_planifier");
