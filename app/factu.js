@@ -101,7 +101,22 @@ async function mkFacture(el){
   el.disabled=true; if(!(await factureTransports(cs, el.dataset.donneur))) el.disabled=false;
 }
 /* accès depuis la fiche d'un transport */
-T.courseExtra = c => kmBloc(c) + carteBloc(c) + factBloc(c);
+T.courseExtra = c => kmBloc(c) + carteBloc(c) + coutBloc(c) + factBloc(c);
+/* ---------- PRIX ET COÛTS D'ACHAT d'un transport : sous-traitance, péages, frais… et marge ---------- */
+const CT = { id:null, lignes:[] };
+const coutsDe = c => Array.isArray(c.couts) ? c.couts : [];
+const totalCouts = c => r2(coutsDe(c).reduce((t,l)=>t+(Number(l.montant)||0),0));
+function coutTot(){ const el=$("#f_prix"); const c=S.courses.find(x=>x.id===CT.id)||{}; const prix=el&&el.value.trim()!=="" ? Number(el.value.replace(",","."))||0 : Number(c.prix)||0;
+  const tot=r2(CT.lignes.reduce((t,l)=>t+(Number(l.montant)||0),0)), marge=r2(prix-tot);
+  return `<span>Prix de vente HT</span><span>${money(prix)}</span><span>Coûts d'achat HT</span><span>${money(tot)}</span><b class="big" style="${marge<0?"color:var(--danger)":""}">Marge</b><b class="big" style="${marge<0?"color:var(--danger)":""}">${money(marge)}${prix>0?` · ${(marge/prix*100).toLocaleString("fr-FR",{maximumFractionDigits:1})} %`:""}</b>`; }
+function coutInner(){ return `<div class="tbl-wrap"><table class="lines" style="min-width:0"><thead><tr><th>Coût d'achat</th><th style="width:150px">Montant HT</th><th></th></tr></thead><tbody>
+    ${CT.lignes.length?CT.lignes.map((l,i)=>`<tr><td><input class="fin" list="coutsListe" data-ct="libelle" data-i="${i}" value="${esc(l.libelle||"")}" placeholder="Sous-traitance, péage, frais…" aria-label="Nature du coût"></td><td><input class="fin num" type="number" step="0.01" min="0" data-ct="montant" data-i="${i}" value="${esc(l.montant??"")}" aria-label="Montant hors taxes"></td><td><button type="button" class="linkbtn" data-f="ctdel" data-i="${i}">Retirer</button></td></tr>`).join("")
+      :`<tr><td colspan="3"><span class="muted">Aucun coût d'achat saisi pour ce transport.</span></td></tr>`}</tbody></table></div>
+    <datalist id="coutsListe"><option value="Sous-traitance / affrètement"><option value="Péages"><option value="Carburant"><option value="Frais de route"><option value="Manutention"><option value="Immobilisation"><option value="Autre"></datalist>
+    <div class="bar"><button type="button" class="btn btn-ghost btn-sm" data-f="ctadd">+ Ajouter un coût</button><button type="button" class="btn btn-navy btn-sm" data-f="ctsave">Enregistrer les coûts</button><span style="flex:1"></span><div class="tot" id="ctTot">${coutTot()}</div></div>`; }
+const coutBloc = c => { if(!("couts" in c) || c.statut==="annulee") return "";
+  CT.id=c.id; CT.lignes=JSON.parse(JSON.stringify(coutsDe(c)));
+  return `<div class="pan" style="background:var(--surface-2)"><h2>Prix et coûts d'achat</h2><div id="ctBox" style="display:flex;flex-direction:column;gap:10px">${coutInner()}</div></div>`; };
 const factBloc = c => {
   if(!F.ready || c.statut==="annulee") return "";
   const p=F.pieces.find(x=>x.type==="facture" && (x.id===c.factureId || (x.lignes||[]).some(l=>l.course_id===c.id)));
@@ -256,7 +271,7 @@ function actStats(condId, from, to){
   L.forEach(c=>{ const a=mn(c.arriveeEnl), ch=mn(c.chargeEnl); if(a!=null&&ch!=null&&ch>=a){ charge+=ch-a; nCharge++; }
     [[c.arriveeEnl,c.enlHeureFin||c.enlHeure],[c.arriveeLiv,c.livHeureFin||c.livHeure]].forEach(([reel,prevu])=>{ const r=mn(reel), pr=mn(prevu); if(r!=null&&pr!=null){ mes++; if(r>pr+TOL) ret++; } }); });
   const jours={}; L.forEach(c=>{ const j=jours[c.enlDate]=jours[c.enlDate]||{deb:null,fin:null,n:0,cs:[]}; j.n++; j.cs.push(c); const a=mn(c.arriveeEnl), l=(!c.livDate||c.livDate===c.enlDate)?mn(c.livre):null; if(a!=null&&(j.deb==null||a<j.deb)) j.deb=a; if(l!=null&&(j.fin==null||l>j.fin)) j.fin=l; });
-  return { L, fin, km:fin.reduce((t,c)=>t+(Number(c.km)||0),0), kmN:fin.filter(c=>c.km!=null).length, ca:fin.reduce((t,c)=>t+(Number(c.prix)||0),0), charge, nCharge, mes, ret, jours,
+  return { L, fin, couts:r2(fin.reduce((t,c)=>t+totalCouts(c),0)), km:fin.reduce((t,c)=>t+(Number(c.km)||0),0), kmN:fin.filter(c=>c.km!=null).length, ca:fin.reduce((t,c)=>t+(Number(c.prix)||0),0), charge, nCharge, mes, ret, jours,
     res:L.filter(c=>c.reserve).length, inc:L.reduce((t,c)=>t+(Array.isArray(c.incidents)?c.incidents.length:0),0),
     bl:fin.filter(c=>(c.docs||[]).some(d=>d.type==="bl")).length, sig:fin.filter(c=>c.signataire).length, joursTrav:Object.keys(jours).length };
 }
@@ -276,7 +291,7 @@ T.views.activite = () => {
     ${rows.map(({c,s})=>`<tr class="click" tabindex="0" data-f="actpick" data-id="${esc(c.id)}"><td><b>${esc(c.nom)}</b></td><td class="num">${s.joursTrav}</td><td class="num">${s.fin.length}</td><td class="num">${s.L.length-s.fin.length}</td><td class="num" style="text-align:right">${money(s.ca)}</td>${kmActif()?`<td class="num" style="text-align:right">${s.kmN?kmTxt(s.km):"—"}</td><td class="num" style="text-align:right">${s.km>0?money(s.ca/s.km):"—"}</td>`:""}<td class="num">${s.mes?`${s.ret} / ${s.mes}`:"—"}</td><td class="num">${s.res}</td><td class="num">${s.inc}</td><td class="num">${s.fin.length-s.bl?`<span style="color:var(--danger);font-weight:700">${s.fin.length-s.bl}</span>`:"0"}</td></tr>`).join("")||`<tr><td colspan="11"><div class="empty">Aucun conducteur.</div></td></tr>`}</tbody></table></div>
     <span class="muted" style="font-size:12px">Cliquez sur un chauffeur pour voir le détail de ses courses. Retards : arrivées plus de ${TOL} minutes après l'heure prévue, sur le nombre d'arrivées mesurées.</span></div>`;
   } else { const s=actStats(k.id,P.from,P.to); const dates=Object.keys(s.jours).sort();
-    corps=`<div class="kpis"><div class="kpi"><small>Courses terminées</small><b class="num">${s.fin.length}${s.L.length-s.fin.length?` <span class="muted" style="font-size:13px">+ ${s.L.length-s.fin.length} à faire</span>`:""}</b></div><div class="kpi"><small>Chiffre d'affaires HT</small><b class="num">${money(s.ca)}</b></div><div class="kpi"><small>Jours travaillés</small><b class="num">${s.joursTrav}</b></div>${kmActif()?`<div class="kpi"><small>Kilomètres en charge</small><b class="num">${s.kmN?kmTxt(s.km):"—"}</b></div><div class="kpi"><small>CA au kilomètre</small><b class="num">${s.km>0?money(s.ca/s.km):"—"}</b></div>`:""}
+    corps=`<div class="kpis"><div class="kpi"><small>Courses terminées</small><b class="num">${s.fin.length}${s.L.length-s.fin.length?` <span class="muted" style="font-size:13px">+ ${s.L.length-s.fin.length} à faire</span>`:""}</b></div><div class="kpi"><small>Chiffre d'affaires HT</small><b class="num">${money(s.ca)}</b></div>${S.courses.some(c=>"couts" in c)?`<div class="kpi ${s.ca-s.couts<0?"bad":""}"><small>Marge (CA − coûts d'achat)</small><b class="num">${money(s.ca-s.couts)}</b></div>`:""}<div class="kpi"><small>Jours travaillés</small><b class="num">${s.joursTrav}</b></div>${kmActif()?`<div class="kpi"><small>Kilomètres en charge</small><b class="num">${s.kmN?kmTxt(s.km):"—"}</b></div><div class="kpi"><small>CA au kilomètre</small><b class="num">${s.km>0?money(s.ca/s.km):"—"}</b></div>`:""}
       <div class="kpi ${s.ret?"warn":""}"><small>Retards (plus de ${TOL} min)</small><b class="num">${s.mes?`${s.ret} / ${s.mes}`:"—"}</b></div><div class="kpi"><small>Temps de chargement moyen</small><b class="num">${s.nCharge?duree(Math.round(s.charge/s.nCharge)):"—"}</b></div>
       <div class="kpi ${s.res?"bad":""}"><small>Réserves</small><b class="num">${s.res}</b></div><div class="kpi ${s.inc?"bad":""}"><small>Problèmes signalés</small><b class="num">${s.inc}</b></div><div class="kpi ${s.fin.length-s.bl?"bad":""}"><small>BL envoyés</small><b class="num">${s.bl} / ${s.fin.length}</b></div></div>
     ${dates.length?dates.map(d=>{ const j=s.jours[d];
@@ -515,6 +530,13 @@ document.addEventListener("click", async e=>{
     let km=null; try{ km=await calcKm(c); }catch(e){} el.disabled=false; el.textContent="Recalculer";
     if(km==null){ toast("Distance introuvable : vérifiez les adresses, ou saisissez-la à la main."); return; }
     const {error}=await sb.from("courses").update({km,km_cle:kmCle(c)}).eq("id",c.id); if(error){ toast(fErr(error)); return; } c.km=km; c.kmCle=kmCle(c); const i=$("#kmIn"); if(i) i.value=km; toast("Distance calculée : "+kmTxt(km)); }
+  else if(a==="ctadd"){ CT.lignes.push({libelle:"",montant:""}); $("#ctBox").innerHTML=coutInner(); const all=document.querySelectorAll('[data-ct="libelle"]'); all[all.length-1]?.focus(); }
+  else if(a==="ctdel"){ CT.lignes.splice(Number(d.i),1); $("#ctBox").innerHTML=coutInner(); }
+  else if(a==="ctsave"){ const c=S.courses.find(x=>x.id===CT.id); if(!c) return;
+    if(CT.lignes.some(l=>String(l.montant).trim()!=="" && !(Number(l.montant)>=0))){ toast("Un montant n'est pas valide."); return; }
+    const L=CT.lignes.map(l=>({libelle:String(l.libelle||"").trim()||"Coût",montant:r2(Number(l.montant)||0)})).filter(l=>l.montant>0 || l.libelle!=="Coût");
+    const {error}=await sb.from("courses").update({couts:L}).eq("id",c.id); if(error){ toast(fErr(error)); return; }
+    c.couts=L; CT.lignes=JSON.parse(JSON.stringify(L)); $("#ctBox").innerHTML=coutInner(); toast("Coûts d'achat enregistrés"); }
   else if(a==="actmode"){ A.mode=d.v; render(); }
   else if(a==="actnav"){ if(d.v==="0") A.ref=todayIso(); else actDecale(Number(d.v)); render(); }
   else if(a==="actpick"){ A.cond=d.id; render(); window.scrollTo(0,0); }
@@ -539,6 +561,8 @@ document.addEventListener("click", async e=>{
   else if(a==="compteur"){ const v=Number($("#cp_"+d.type).value); if(!v){ toast("Indiquez le prochain numéro."); return; } const {error}=await sb.rpc("regler_compteur",{p_type:d.type,p_prochain:v}); if(error){ toast(fErr(error)); return; } toast("Numérotation mise à jour"); reload(); }
 });
 document.addEventListener("input", e=>{
+  const ct=e.target.dataset||{}; if(ct.ct && CT.lignes[Number(ct.i)]){ CT.lignes[Number(ct.i)][ct.ct]=e.target.value; const t=$("#ctTot"); if(t) t.innerHTML=coutTot(); return; }
+  if(e.target.id==="f_prix"){ const t=$("#ctTot"); if(t) t.innerHTML=coutTot(); }
   const el=e.target; if(el.dataset && el.dataset.pr && F.prods && F.prods[Number(el.dataset.i)]){ F.prods[Number(el.dataset.i)][el.dataset.pr]=el.value; return; } if(!el.dataset || !el.dataset.fl || !F.draft) return;
   const l=F.draft.lignes[Number(el.dataset.i)]; if(!l) return;
   l[el.dataset.fl] = el.dataset.fl==="designation" ? el.value : (el.value===""?"":Number(el.value));
