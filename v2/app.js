@@ -429,7 +429,7 @@ function courseForm(c,opts={}){
     <label class="fld">Livré<input type="time" id="f_livre" value="${esc(c.livre||"")}"></label>
     <label class="fld wide">Réserves à la livraison<textarea id="f_reserve" placeholder="Vide = sans réserve">${esc(c.reserve||"")}</textarea></label></fieldset>`}
   <fieldset><legend>Consignes</legend>${grp("i")}</fieldset>
-  ${incHtml}${sigHtml}
+  ${incHtml}${sigHtml}${c.id&&X.courseExtra?X.courseExtra(c):""}
   ${docs?`<div><b>Documents</b><ul style="margin:6px 0 0">${docs}</ul></div>`:""}
   <div class="row-btns" id="formBtns">
     ${opts.canDelete?`<button type="button" class="btn btn-danger" data-act="askdel" style="margin-right:auto">Supprimer</button>`:""}

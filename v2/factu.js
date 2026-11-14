@@ -58,7 +58,7 @@ T.nav = () => {
     sub("a_planifier","À planifier",cnt("a_planifier"),true)+sub("planifiee","Planifiés",cnt("planifiee"))+sub("envoyee","Envoyés",cnt("envoyee"))+
     sub("en_cours","En cours",cnt("en_cours"))+sub("terminee","Terminés",cnt("terminee"))+L("conducteur","Vue conducteur")+
     `<span class="grp">FACTURATION</span>`+L("devis","Devis")+L("factures","Facturation de ventes")+
-    subv("afacturer","À facturer",F.ready?aFact().length:0,true)+subv("factures","Factures",nb("facture"))+subv("avoirs","Avoirs",nb("avoir"))+
+    subv("afacturer","Transports à facturer",F.ready?aFact().length:0,true)+subv("factures","Factures",nb("facture"))+subv("avoirs","Avoirs",nb("avoir"))+
     `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+L("reglages","Paramètres");
 };
 
@@ -68,7 +68,7 @@ T.views.afacturer = () => {
   const L=aFact(); const groups={}; L.forEach(c=>{ const k=(c.donneur||"Sans client").trim(); (groups[k]=groups[k]||[]).push(c); });
   const names=Object.keys(groups).sort((a,b)=>a.localeCompare(b));
   const tot=L.reduce((s,c)=>s+(Number(c.prix)||0),0);
-  return `<div class="bar"><h1>À facturer</h1></div>
+  return `<div class="bar"><h1>Facturer des transports</h1><button type="button" class="btn btn-ghost" data-f="new" data-type="facture">+ Facture libre (sans transport)</button></div>
   <div class="kpis"><div class="kpi"><small>Transports terminés à facturer</small><b class="num">${L.length}</b></div><div class="kpi"><small>Montant HT</small><b class="num">${money(tot)}</b></div><div class="kpi"><small>Clients concernés</small><b class="num">${names.length}</b></div></div>
   ${names.length?names.map((n,gi)=>{ const cs=groups[n].sort((a,b)=>(a.enlDate||"").localeCompare(b.enlDate||"")); const st=cs.reduce((s,c)=>s+(Number(c.prix)||0),0);
     return `<div class="pan"><div class="bar"><h2 style="flex:1">${esc(n)}</h2><span class="muted">${cs.length} transport${cs.length>1?"s":""} · ${money(st)} HT</span><button type="button" class="btn btn-accent" data-f="mkfact" data-g="${gi}" data-donneur="${esc(n)}">Créer la facture</button></div>
@@ -80,20 +80,30 @@ T.views.afacturer = () => {
       <td class="num" style="text-align:right">${c.prix?money(c.prix):`<span style="color:var(--danger);font-weight:600">Prix à saisir</span>`}</td></tr>`).join("")}</tbody></table></div></div>`; }).join("")
    :`<div class="pan"><div class="empty">Aucun transport terminé en attente de facturation.</div></div>`}`;
 };
+const ligneTransport = c => ({ designation:`Transport ${c.enlVille||"?"} → ${c.livVille||"?"} du ${d2(c.enlDate)}${c.ref?" — Réf. "+c.ref:""}`, qte:1, pu:Number(c.prix)||0, tva:tvaDef(), course_id:c.id });
+const nbTransports = p => (p.lignes||[]).filter(l=>l.course_id).length;
+async function factureTransports(cs, donneur){
+  let cl=clientByName(donneur);
+  if(!cl && donneur){ const r=await sb.from("clients").insert({entreprise_id:EID(),nom:donneur}).select().single(); if(r.error){ toast(fErr(r.error)); return false; } cl=r.data; }
+  const lignes=cs.map(ligneTransport); const t=totals(lignes);
+  const r=await sb.from("pieces").insert({entreprise_id:EID(),type:"facture",client_id:cl?cl.id:null,lignes,total_ht:t.ht,total_tva:t.tva,total_ttc:t.ttc}).select().single();
+  if(r.error){ toast(fErr(r.error)); return false; }
+  await load(); location.hash="factures"; render(); openPiece(r.data.id); return true;
+}
 async function mkFacture(el){
   const ids=[...document.querySelectorAll(`[data-fsel="${el.dataset.g}"]:checked`)].map(x=>x.value);
   const cs=S.courses.filter(c=>ids.includes(c.id)).sort((a,b)=>(a.enlDate||"").localeCompare(b.enlDate||""));
   if(!cs.length){ toast("Cochez au moins un transport."); return; }
-  el.disabled=true;
-  let cl=clientByName(el.dataset.donneur);
-  if(!cl){ const r=await sb.from("clients").insert({entreprise_id:EID(),nom:el.dataset.donneur}).select().single(); if(r.error){ toast(fErr(r.error)); el.disabled=false; return; } cl=r.data; }
-  const tva=tvaDef();
-  const lignes=cs.map(c=>({ designation:`Transport ${c.enlVille||"?"} → ${c.livVille||"?"} du ${d2(c.enlDate)}${c.ref?" — Réf. "+c.ref:""}`, qte:1, pu:Number(c.prix)||0, tva, course_id:c.id }));
-  const t=totals(lignes);
-  const r=await sb.from("pieces").insert({entreprise_id:EID(),type:"facture",client_id:cl.id,lignes,total_ht:t.ht,total_tva:t.tva,total_ttc:t.ttc}).select().single();
-  if(r.error){ toast(fErr(r.error)); el.disabled=false; return; }
-  await load(); location.hash="factures"; render(); openPiece(r.data.id);
+  el.disabled=true; if(!(await factureTransports(cs, el.dataset.donneur))) el.disabled=false;
 }
+/* accès depuis la fiche d'un transport */
+T.courseExtra = c => {
+  if(!F.ready || c.statut==="annulee") return "";
+  const p=F.pieces.find(x=>x.type==="facture" && (x.id===c.factureId || (x.lignes||[]).some(l=>l.course_id===c.id)));
+  if(p) return `<div class="banner"><span><b>Facturation :</b> ${p.statut==="brouillon"?"ce transport est dans un brouillon de facture.":"transport facturé — facture "+esc(p.numero||"")+"."}</span><button type="button" class="btn btn-ghost btn-sm" data-f="openfact" data-id="${esc(p.id)}">Ouvrir la facture</button></div>`;
+  if(c.statut!=="terminee") return `<div class="muted" style="font-size:13px"><b>Facturation :</b> ce transport pourra être facturé une fois terminé.</div>`;
+  return `<div class="banner"><span><b>Facturation :</b> transport terminé, pas encore facturé${c.prix?"":" (prix à saisir)"}.</span><button type="button" class="btn btn-accent btn-sm" data-f="factcourse" data-id="${esc(c.id)}">Facturer ce transport</button></div>`;
+};
 
 /* ---------- LISTES : factures, avoirs, devis ---------- */
 function listView(type){
@@ -110,14 +120,15 @@ function listView(type){
       <div class="kpi"><small>À encaisser (TTC)</small><b class="num">${money(sum(all.filter(p=>p.statut==="finalisee"),"total_ttc"))}</b></div>
       <div class="kpi ${all.some(enRetard)?"bad":""}"><small>En retard (TTC)</small><b class="num">${money(sum(all.filter(enRetard),"total_ttc"))}</b></div>
       <div class="kpi"><small>Encaissé ce mois (TTC)</small><b class="num">${money(sum(all.filter(p=>p.statut==="payee"&&String(p.paye_le||"").slice(0,7)===mois),"total_ttc"))}</b></div></div>` : "";
-  return `<div class="bar"><h1>${lab.pl}</h1>${type==="facture"?`<a class="btn btn-ghost" href="#afacturer">Facturer des transports</a>`:""}${lab.neuf?`<button type="button" class="btn btn-accent" data-f="new" data-type="${type}">+ ${lab.neuf}</button>`:""}</div>
+  return `<div class="bar"><h1>${lab.pl}</h1>${type==="facture"?`<a class="btn btn-accent" href="#afacturer">Facturer des transports</a><button type="button" class="btn btn-navy" data-f="new" data-type="facture">+ Facture libre (sans transport)</button>`:lab.neuf?`<button type="button" class="btn btn-accent" data-f="new" data-type="${type}">+ ${lab.neuf}</button>`:""}</div>
+  ${type==="facture"?`<span class="muted" style="font-size:13px"><b>Deux façons de facturer :</b> « Facturer des transports » reprend les transports terminés (une ligne par transport, qui passe ensuite en « facturé »). « Facture libre » sert pour tout le reste : location, immobilisation, frais divers, prestation sans transport saisi.</span>`:""}
   ${kpis}
   <div class="seg" role="group" aria-label="Filtre" style="align-self:flex-start;flex-wrap:wrap">${sts.map(([k,l])=>`<button type="button" class="${f===k?"on":""}" data-f="filtre" data-type="${type}" data-v="${k}">${l}</button>`).join("")}</div>
-  <div class="pan"><div class="tbl-wrap"><table><thead><tr><th>Numéro</th><th>Client</th><th>Date</th>${type==="avoir"?"<th>Facture d'origine</th>":`<th>${type==="devis"?"Valable jusqu'au":"Échéance"}</th>`}<th style="text-align:right">Total HT</th><th style="text-align:right">Total TTC</th><th>Statut</th></tr></thead><tbody>
+  <div class="pan"><div class="tbl-wrap"><table><thead><tr><th>Numéro</th><th>Client</th>${type==="facture"?"<th>Origine</th>":""}<th>Date</th>${type==="avoir"?"<th>Facture d'origine</th>":`<th>${type==="devis"?"Valable jusqu'au":"Échéance"}</th>`}<th style="text-align:right">Total HT</th><th style="text-align:right">Total TTC</th><th>Statut</th></tr></thead><tbody>
   ${L.length?L.map(p=>{ const cn=(p.client&&p.client.nom)||clientById(p.client_id)?.nom||"—"; const t=p.statut==="brouillon"?totals(p.lignes):{ht:p.total_ht,ttc:p.total_ttc};
-    return `<tr class="click" tabindex="0" data-f="open" data-id="${esc(p.id)}"><td><b>${esc(numero(p))}</b></td><td>${esc(cn)}</td><td class="num">${d2(p.date_emission||p.created_at)}</td>
+    return `<tr class="click" tabindex="0" data-f="open" data-id="${esc(p.id)}"><td><b>${esc(numero(p))}</b></td><td>${esc(cn)}</td>${type==="facture"?`<td>${nbTransports(p)?`${nbTransports(p)} transport${nbTransports(p)>1?"s":""}`:`<span class="muted">Libre</span>`}</td>`:""}<td class="num">${d2(p.date_emission||p.created_at)}</td>
     <td class="num">${type==="avoir"?esc(F.pieces.find(x=>x.id===p.origine_id)?.numero||"—"):d2(p.date_echeance)}</td><td class="num" style="text-align:right">${money(t.ht)}</td><td class="num" style="text-align:right">${money(t.ttc)}</td><td>${chip(p)}</td></tr>`; }).join("")
-   :`<tr><td colspan="7"><div class="empty">${all.length?"Aucune pièce pour ce filtre.":type==="avoir"?"Aucun avoir. Un avoir se crée depuis une facture finalisée, pour l'annuler ou la corriger.":type==="facture"?"Aucune facture pour l'instant. Commencez par « Facturer des transports ».":"Aucun devis pour l'instant."}</div></td></tr>`}
+   :`<tr><td colspan="8"><div class="empty">${all.length?"Aucune pièce pour ce filtre.":type==="avoir"?"Aucun avoir. Un avoir se crée depuis une facture finalisée, pour l'annuler ou la corriger.":type==="facture"?"Aucune facture pour l'instant. Utilisez « Facturer des transports » ou « Facture libre ».":"Aucun devis pour l'instant."}</div></td></tr>`}
   </tbody></table></div></div>`;
 }
 T.views.factures = () => listView("facture");
@@ -168,17 +179,20 @@ function drawEditor(){
     <div class="fgrid"><label class="fld">Client<select class="fin" id="fClient"><option value="">— Choisir dans le carnet d'adresses —</option>${cls.map(c=>`<option value="${esc(c.id)}" ${p.client_id===c.id?"selected":""}>${esc(c.nom)}</option>`).join("")}</select></label>
       ${p.type!=="avoir"?`<label class="fld">${p.type==="devis"?"Valable jusqu'au":"Échéance (vide = délai du client)"}<input type="date" class="fin" id="fEch" value="${esc(p.date_echeance||"")}"></label>`:""}</div>
     <div class="tbl-wrap"><table class="lines"><thead><tr><th style="min-width:240px">Désignation</th><th style="width:84px">Qté</th><th style="width:120px">Prix unitaire HT</th><th style="width:84px">TVA %</th><th style="text-align:right;width:110px">Total HT</th><th></th></tr></thead><tbody>
-    ${p.lignes.map((l,i)=>`<tr><td><input class="fin" data-fl="designation" data-i="${i}" value="${esc(l.designation||"")}" aria-label="Désignation"></td>
+    ${p.lignes.map((l,i)=>`<tr><td><input class="fin" data-fl="designation" data-i="${i}" value="${esc(l.designation||"")}" aria-label="Désignation">${l.course_id?`<div class="muted" style="font-size:11px;margin-top:2px">Lié à un transport : il passera en « facturé » à la finalisation.</div>`:""}</td>
       <td><input class="fin num" type="number" step="0.01" data-fl="qte" data-i="${i}" value="${esc(l.qte??"")}" aria-label="Quantité"></td>
       <td><input class="fin num" type="number" step="0.01" data-fl="pu" data-i="${i}" value="${esc(l.pu??"")}" aria-label="Prix unitaire hors taxes"></td>
       <td><input class="fin num" type="number" step="0.1" min="0" data-fl="tva" data-i="${i}" value="${esc(l.tva??"")}" aria-label="Taux de TVA"></td>
       <td class="num" style="text-align:right" id="fLt${i}">${money(r2((Number(l.qte)||0)*(Number(l.pu)||0)))}</td>
       <td><button type="button" class="linkbtn" data-f="delline" data-i="${i}">Retirer</button></td></tr>`).join("")}</tbody></table></div>
-    <div class="bar"><button type="button" class="btn btn-ghost btn-sm" data-f="addline">+ Ajouter une ligne</button><span style="flex:1"></span><div class="tot" id="fTot">${totHtml(t)}</div></div>
+    <div class="bar"><button type="button" class="btn btn-ghost btn-sm" data-f="addline">+ Ajouter une ligne libre</button>${p.type==="facture"?addCourseSel(p):""}<span style="flex:1"></span><div class="tot" id="fTot">${totHtml(t)}</div></div>
     <label class="fld">Texte libre sur le document (facultatif)<textarea class="fin" id="fNotes" rows="2">${esc(p.notes||"")}</textarea></label>
     <div id="fConfirm"></div>
     <div class="row-btns"><button type="button" class="btn btn-danger" data-f="del" style="margin-right:auto">Supprimer le brouillon</button><button type="button" class="btn btn-ghost" data-act="close">Fermer</button><button type="button" class="btn btn-ghost" data-f="preview">Aperçu</button><button type="button" class="btn btn-navy" data-f="save">Enregistrer</button><button type="button" class="btn btn-accent" data-f="askfin">Finaliser</button></div></div>`);
 }
+function addCourseSel(p){ const deja=new Set(p.lignes.map(l=>l.course_id).filter(Boolean)); const cn=norm(clientById(p.client_id)?.nom);
+  const L=aFact().filter(c=>!deja.has(c.id)).sort((a,b)=>(norm(b.donneur)===cn)-(norm(a.donneur)===cn) || (a.enlDate||"").localeCompare(b.enlDate||""));
+  return L.length ? `<select class="fin" id="fAddCourse" style="width:auto;max-width:320px" aria-label="Ajouter un transport terminé"><option value="">+ Ajouter un transport terminé…</option>${L.map(c=>`<option value="${esc(c.id)}">${esc(c.donneur||"")} · ${esc(c.enlVille||"?")} → ${esc(c.livVille||"?")} · ${d2(c.enlDate)}${c.prix?" · "+money(c.prix):""}</option>`).join("")}</select>` : ""; }
 const totHtml = t => `<span>Total HT</span><span>${money(t.ht)}</span><span>TVA</span><span>${money(t.tva)}</span><b class="big">Total TTC</b><b class="big">${money(t.ttc)}</b>`;
 function readDraft(){ const p=F.draft; if(!p) return; const c=$("#fClient"); if(c) p.client_id=c.value||null; const e=$("#fEch"); if(e) p.date_echeance=e.value||null; const n=$("#fNotes"); if(n) p.notes=n.value.trim()||null; }
 async function saveDraft(silent){
@@ -256,6 +270,8 @@ document.addEventListener("click", async e=>{
   const cur=()=>F.pieces.find(x=>x.id===F.openId);
   if(a==="filtre"){ F.filtre[d.type]=d.v; render(); }
   else if(a==="open"){ openPiece(d.id); }
+  else if(a==="openfact"){ closeModal(); await load(); location.hash="factures"; render(); openPiece(d.id); }
+  else if(a==="factcourse"){ const c=S.courses.find(x=>x.id===d.id); if(!c) return; el.disabled=true; closeModal(); await factureTransports([c],(c.donneur||"").trim()); }
   else if(a==="mkfact"){ mkFacture(el); }
   else if(a==="new"){ const r=await newPiece(d.type); if(r.error){ toast(fErr(r.error)); return; } await load(); render(); openPiece(r.data.id); }
   else if(a==="addline"){ readDraft(); F.draft.lignes.push({designation:"",qte:1,pu:0,tva:tvaDef()}); drawEditor(); const all=document.querySelectorAll('[data-fl="designation"]'); all[all.length-1]?.focus(); }
@@ -295,6 +311,14 @@ document.addEventListener("input", e=>{
   l[el.dataset.fl] = el.dataset.fl==="designation" ? el.value : (el.value===""?"":Number(el.value));
   const c=$("#fLt"+el.dataset.i); if(c) c.textContent=money(r2((Number(l.qte)||0)*(Number(l.pu)||0)));
   const t=$("#fTot"); if(t) t.innerHTML=totHtml(totals(F.draft.lignes));
+});
+document.addEventListener("change", e=>{
+  if(e.target.id!=="fAddCourse" || !F.draft || !e.target.value) return;
+  const c=S.courses.find(x=>x.id===e.target.value); if(!c) return;
+  readDraft(); const vide=F.draft.lignes.length===1 && !String(F.draft.lignes[0].designation||"").trim() && !Number(F.draft.lignes[0].pu);
+  if(vide) F.draft.lignes=[]; F.draft.lignes.push(ligneTransport(c));
+  if(!F.draft.client_id){ const cl=clientByName(c.donneur); if(cl) F.draft.client_id=cl.id; }
+  drawEditor();
 });
 document.addEventListener("submit", e=>{ if(e.target.id==="cliForm"){ e.preventDefault(); saveClient(); } });
 document.addEventListener("keydown", e=>{ if(e.key==="Enter" && e.target.matches && e.target.matches("tr[data-f]")) e.target.click(); });
