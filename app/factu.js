@@ -63,7 +63,7 @@ T.nav = () => {
     sub("en_cours","En cours",cnt("en_cours"))+sub("terminee","Terminés",cnt("terminee"))+L("conducteur","Vue conducteur")+
     `<span class="grp">FACTURATION</span>`+L("devis","Devis")+L("factures","Facturation de ventes")+
     subv("afacturer","Transports à facturer",F.ready?aFact().length:0,true)+subv("factures","Factures",nb("facture"))+subv("relances","Relances clients",F.pieces.filter(enRetard).length,true)+subv("avoirs","Avoirs",nb("avoir"))+
-    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+subv("echvehicules","Contrôles véhicules",echCompte("v"),true)+subv("echchauffeurs","Documents chauffeurs",echCompte("c"),true)+L("reglages","Paramètres");
+    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("activite","Activité chauffeurs")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+subv("echvehicules","Contrôles véhicules",echCompte("v"),true)+subv("echchauffeurs","Documents chauffeurs",echCompte("c"),true)+L("reglages","Paramètres");
 };
 
 /* ---------- À FACTURER ---------- */
@@ -167,6 +167,58 @@ function echView(g){
 }
 T.views.echvehicules = () => echView("v");
 T.views.echchauffeurs = () => echView("c");
+
+/* ---------- ACTIVITÉ PAR CHAUFFEUR : jour, semaine, mois ---------- */
+const A = { cond:"", mode:"semaine", ref:todayIso() };
+const mn = h => h ? Number(h.slice(0,2))*60+Number(h.slice(3,5)) : null;
+const duree = m => m==null ? "—" : (m>=60 ? Math.floor(m/60)+" h "+String(m%60).padStart(2,"0") : m+" min");
+const pad2 = n => String(n).padStart(2,"0");
+function actPeriode(){ const [y,m,d]=A.ref.split("-").map(Number);
+  if(A.mode==="jour") return { from:A.ref, to:A.ref, txt:frDate(A.ref,{weekday:"long",day:"numeric",month:"long",year:"numeric"}) };
+  if(A.mode==="mois"){ const last=new Date(y,m,0).getDate(); return { from:`${y}-${pad2(m)}-01`, to:`${y}-${pad2(m)}-${pad2(last)}`, txt:frDate(`${y}-${pad2(m)}-01`,{month:"long",year:"numeric"}) }; }
+  const wd=(new Date(y,m-1,d).getDay()+6)%7, from=T.addDays(A.ref,-wd), to=T.addDays(from,6);
+  return { from, to, txt:`Semaine du ${frDate(from,{day:"numeric",month:"long"})} au ${frDate(to,{day:"numeric",month:"long",year:"numeric"})}` }; }
+function actDecale(dir){ if(A.mode==="mois"){ const [y,m]=A.ref.split("-").map(Number); const x=new Date(y,m-1+dir,1); A.ref=`${x.getFullYear()}-${pad2(x.getMonth()+1)}-01`; } else A.ref=T.addDays(A.ref,dir*(A.mode==="jour"?1:7)); }
+const TOL = 15; // minutes de tolérance avant de compter un retard
+function actStats(condId, from, to){
+  const L=S.courses.filter(c=>c.conducteurId===condId && c.enlDate && c.enlDate>=from && c.enlDate<=to && c.statut!=="annulee").sort((a,b)=>a.enlDate.localeCompare(b.enlDate)||(mn(a.enlHeure)||0)-(mn(b.enlHeure)||0));
+  const fin=L.filter(c=>c.statut==="terminee"); let charge=0,nCharge=0,mes=0,ret=0;
+  L.forEach(c=>{ const a=mn(c.arriveeEnl), ch=mn(c.chargeEnl); if(a!=null&&ch!=null&&ch>=a){ charge+=ch-a; nCharge++; }
+    [[c.arriveeEnl,c.enlHeureFin||c.enlHeure],[c.arriveeLiv,c.livHeureFin||c.livHeure]].forEach(([reel,prevu])=>{ const r=mn(reel), pr=mn(prevu); if(r!=null&&pr!=null){ mes++; if(r>pr+TOL) ret++; } }); });
+  const jours={}; L.forEach(c=>{ const j=jours[c.enlDate]=jours[c.enlDate]||{deb:null,fin:null,n:0,cs:[]}; j.n++; j.cs.push(c); const a=mn(c.arriveeEnl), l=(!c.livDate||c.livDate===c.enlDate)?mn(c.livre):null; if(a!=null&&(j.deb==null||a<j.deb)) j.deb=a; if(l!=null&&(j.fin==null||l>j.fin)) j.fin=l; });
+  return { L, fin, ca:fin.reduce((t,c)=>t+(Number(c.prix)||0),0), charge, nCharge, mes, ret, jours,
+    res:L.filter(c=>c.reserve).length, inc:L.reduce((t,c)=>t+(Array.isArray(c.incidents)?c.incidents.length:0),0),
+    bl:fin.filter(c=>(c.docs||[]).some(d=>d.type==="bl")).length, sig:fin.filter(c=>c.signataire).length, joursTrav:Object.keys(jours).length };
+}
+const hm = m => m==null ? "—" : pad2(Math.floor(m/60))+":"+pad2(m%60);
+T.views.activite = () => {
+  const P=actPeriode(); const conds=S.conducteurs.filter(c=>c.actif!==false).sort((a,b)=>a.nom.localeCompare(b.nom)); const k=conds.find(c=>c.id===A.cond);
+  const tete=`<div class="bar"><h1>Activité chauffeurs</h1><button type="button" class="btn btn-ghost" data-f="actprint">Imprimer / PDF</button></div>
+    <div class="bar"><select class="fin" id="actCond" style="width:auto;min-width:220px" aria-label="Chauffeur"><option value="">Tous les chauffeurs (comparatif)</option>${conds.map(c=>`<option value="${esc(c.id)}" ${A.cond===c.id?"selected":""}>${esc(c.nom)}</option>`).join("")}</select>
+      <div class="seg" role="group" aria-label="Période">${[["jour","Jour"],["semaine","Semaine"],["mois","Mois"]].map(([v,l])=>`<button type="button" class="${A.mode===v?"on":""}" data-f="actmode" data-v="${v}">${l}</button>`).join("")}</div>
+      <button type="button" class="btn btn-ghost btn-sm" data-f="actnav" data-v="-1" aria-label="Période précédente">‹</button><b style="min-width:0">${esc(P.txt)}</b><button type="button" class="btn btn-ghost btn-sm" data-f="actnav" data-v="1" aria-label="Période suivante">›</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-f="actnav" data-v="0">Aujourd'hui</button></div>`;
+  let corps;
+  if(!k){ const rows=conds.map(c=>({c,s:actStats(c.id,P.from,P.to)}));
+    const tot=rows.reduce((t,r)=>({n:t.n+r.s.fin.length,ca:t.ca+r.s.ca}),{n:0,ca:0});
+    corps=`<div class="kpis"><div class="kpi"><small>Courses terminées</small><b class="num">${tot.n}</b></div><div class="kpi"><small>Chiffre d'affaires HT</small><b class="num">${money(tot.ca)}</b></div><div class="kpi"><small>Chauffeurs actifs sur la période</small><b class="num">${rows.filter(r=>r.s.L.length).length} / ${conds.length}</b></div></div>
+    <div class="pan"><h2>Comparatif — ${esc(P.txt)}</h2><div class="tbl-wrap"><table><thead><tr><th>Chauffeur</th><th>Jours travaillés</th><th>Courses terminées</th><th>Restant à faire</th><th style="text-align:right">CA HT</th><th>Retards</th><th>Réserves</th><th>Problèmes signalés</th><th>BL manquants</th></tr></thead><tbody>
+    ${rows.map(({c,s})=>`<tr class="click" tabindex="0" data-f="actpick" data-id="${esc(c.id)}"><td><b>${esc(c.nom)}</b></td><td class="num">${s.joursTrav}</td><td class="num">${s.fin.length}</td><td class="num">${s.L.length-s.fin.length}</td><td class="num" style="text-align:right">${money(s.ca)}</td><td class="num">${s.mes?`${s.ret} / ${s.mes}`:"—"}</td><td class="num">${s.res}</td><td class="num">${s.inc}</td><td class="num">${s.fin.length-s.bl?`<span style="color:var(--danger);font-weight:700">${s.fin.length-s.bl}</span>`:"0"}</td></tr>`).join("")||`<tr><td colspan="9"><div class="empty">Aucun conducteur.</div></td></tr>`}</tbody></table></div>
+    <span class="muted" style="font-size:12px">Cliquez sur un chauffeur pour voir le détail de ses courses. Retards : arrivées plus de ${TOL} minutes après l'heure prévue, sur le nombre d'arrivées mesurées.</span></div>`;
+  } else { const s=actStats(k.id,P.from,P.to); const dates=Object.keys(s.jours).sort();
+    corps=`<div class="kpis"><div class="kpi"><small>Courses terminées</small><b class="num">${s.fin.length}${s.L.length-s.fin.length?` <span class="muted" style="font-size:13px">+ ${s.L.length-s.fin.length} à faire</span>`:""}</b></div><div class="kpi"><small>Chiffre d'affaires HT</small><b class="num">${money(s.ca)}</b></div><div class="kpi"><small>Jours travaillés</small><b class="num">${s.joursTrav}</b></div>
+      <div class="kpi ${s.ret?"warn":""}"><small>Retards (plus de ${TOL} min)</small><b class="num">${s.mes?`${s.ret} / ${s.mes}`:"—"}</b></div><div class="kpi"><small>Temps de chargement moyen</small><b class="num">${s.nCharge?duree(Math.round(s.charge/s.nCharge)):"—"}</b></div>
+      <div class="kpi ${s.res?"bad":""}"><small>Réserves</small><b class="num">${s.res}</b></div><div class="kpi ${s.inc?"bad":""}"><small>Problèmes signalés</small><b class="num">${s.inc}</b></div><div class="kpi ${s.fin.length-s.bl?"bad":""}"><small>BL envoyés</small><b class="num">${s.bl} / ${s.fin.length}</b></div></div>
+    ${dates.length?dates.map(d=>{ const j=s.jours[d];
+      return `<div class="pan"><div class="bar"><h2 style="flex:1">${esc(frDate(d,{weekday:"long",day:"numeric",month:"long"}))}</h2><span class="muted">${j.n} course${j.n>1?"s":""} · première arrivée ${hm(j.deb)} · dernière livraison ${hm(j.fin)}${j.deb!=null&&j.fin!=null&&j.fin>=j.deb?" · amplitude "+duree(j.fin-j.deb):""}</span></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Client</th><th>Trajet</th><th>Prévu</th><th>Arrivé enl.</th><th>Chargé</th><th>Arrivé liv.</th><th>Livré</th><th>Suivi</th><th style="text-align:right">Prix HT</th></tr></thead><tbody>${j.cs.map(c=>{ const late=(r,p)=>{ const a=mn(r), b=mn(p); return a!=null&&b!=null&&a>b+TOL; };
+        const notes=[c.statut!=="terminee"?`<span class="chip st-${esc(c.statut)}">${c.statut==="en_cours"?"En cours":"À faire"}</span>`:"", c.reserve?`<span class="chip late">Réserve</span>`:"", (c.incidents||[]).length?`<span class="chip late">${c.incidents.length} problème${c.incidents.length>1?"s":""}</span>`:"", c.statut==="terminee"&&!(c.docs||[]).some(x=>x.type==="bl")?`<span class="chip late">BL manquant</span>`:"", c.signataire?`<span class="chip st-terminee">Signé</span>`:""].filter(Boolean).join(" ");
+        const cel=(v,l)=>`<td class="num"${l?' style="color:var(--danger);font-weight:700"':""}>${esc(v||"—")}${l?" (retard)":""}</td>`;
+        return `<tr><td><b>${esc(c.donneur||"")}</b>${c.ref?`<div class="muted">Réf. ${esc(c.ref)}</div>`:""}</td><td>${esc(c.enlVille||"?")} → ${esc(c.livVille||"?")}</td><td class="num">${esc(c.enlHeure||"—")} → ${esc(c.livHeure||"—")}</td>${cel(c.arriveeEnl,late(c.arriveeEnl,c.enlHeureFin||c.enlHeure))}${cel(c.chargeEnl)}${cel(c.arriveeLiv,late(c.arriveeLiv,c.livHeureFin||c.livHeure))}${cel(c.livre)}<td>${notes||`<span class="muted">RAS</span>`}</td><td class="num" style="text-align:right">${c.prix?money(c.prix):"—"}</td></tr>`; }).join("")}</tbody></table></div></div>`; }).join("")
+     :`<div class="pan"><div class="empty">Aucune course pour ${esc(k.nom)} sur cette période.</div></div>`}
+    <span class="muted" style="font-size:12px">Les heures sont celles validées par le chauffeur dans Dream Chauffeur. Ce relevé suit l'activité : il ne remplace pas le chronotachygraphe pour le temps de travail et de conduite.</span>`; }
+  return tete+`<div id="actBody" style="display:flex;flex-direction:column;gap:14px">${corps}</div>`;
+};
 
 /* ---------- RELANCES CLIENTS ---------- */
 function retardsParClient(){ const g={}; F.pieces.filter(enRetard).forEach(p=>{ const k=p.client_id||"?"; (g[k]=g[k]||[]).push(p); });
@@ -387,6 +439,11 @@ document.addEventListener("click", async e=>{
     const r=await newPiece("facture",{client_id:p.client_id,lignes,total_ht:t.ht,total_tva:t.tva,total_ttc:t.ttc,notes:`Selon devis ${p.numero}`}); if(r.error){ toast(fErr(r.error)); return; }
     await load(); location.hash="factures"; render(); openPiece(r.data.id); }
   else if(a==="relance"){ openRelance(d.client); }
+  else if(a==="actmode"){ A.mode=d.v; render(); }
+  else if(a==="actnav"){ if(d.v==="0") A.ref=todayIso(); else actDecale(Number(d.v)); render(); }
+  else if(a==="actpick"){ A.cond=d.id; render(); window.scrollTo(0,0); }
+  else if(a==="actprint"){ let z=$("#printzone"); if(!z){ z=document.createElement("div"); z.id="printzone"; document.body.appendChild(z); } const k=S.conducteurs.find(c=>c.id===A.cond);
+    z.innerHTML=`<div class="paper"><h3>Activité — ${esc(k?k.nom:"tous les chauffeurs")}</h3><div>${esc(actPeriode().txt)} · ${esc(S.entreprise?.nom||"")}</div>${$("#actBody").innerHTML}</div>`; window.print(); }
   else if(a==="rcopy"){ const t=$("#rObj").value+"\n\n"+$("#rTxt").value; try{ await navigator.clipboard.writeText(t); toast("Message copié"); }catch(err){ $("#rTxt").select(); toast("Copie impossible ici : le message est sélectionné, faites Ctrl+C."); } }
   else if(a==="rmail"){ const to=$("#rMail").value.trim(); if(!to){ toast("Indiquez l'e-mail du client."); $("#rMail").focus(); return; }
     location.href="mailto:"+encodeURIComponent(to)+"?subject="+encodeURIComponent($("#rObj").value)+"&body="+encodeURIComponent($("#rTxt").value); }
@@ -419,6 +476,7 @@ document.addEventListener("change", async e=>{
     const {error}=await sb.from(de.ech).update({echeances:ech}).eq("id",o.id);
     if(error){ toast(/echeances/.test(error.message||"")?"Les échéances ne sont pas encore activées sur cette base.":fErr(error)); e.target.value=(o.echeances||{})[de.k]||""; return; }
     o.echeances=ech; const id=e.target.id; toast("Date enregistrée"); render(); const again=document.getElementById(id); again&&again.focus(); return; }
+  if(e.target.id==="actCond"){ A.cond=e.target.value; render(); return; }
   if(e.target.id==="fAddProd" && F.draft && e.target.value!==""){ const pr=(F.param.facturation.produits||[])[Number(e.target.value)]; if(!pr) return; readDraft();
     const vide=F.draft.lignes.length===1 && !String(F.draft.lignes[0].designation||"").trim() && !Number(F.draft.lignes[0].pu); if(vide) F.draft.lignes=[];
     F.draft.lignes.push({designation:pr.nom,qte:1,pu:Number(pr.prix)||0,tva:pr.tva===""||pr.tva==null?tvaDef():Number(pr.tva)}); drawEditor(); return; }

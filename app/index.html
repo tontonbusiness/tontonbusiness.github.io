@@ -266,7 +266,7 @@ td.num{white-space:nowrap} .lines{min-width:680px} .lines td{padding:6px 6px;ver
 .paper .wm{position:absolute;top:38%;left:0;right:0;text-align:center;font-size:64px;font-weight:800;color:rgba(185,58,14,.14);transform:rotate(-18deg);pointer-events:none}
 #printzone{display:none}
 @media (max-width:600px){ .paper{padding:14px} .paper .two-col{grid-template-columns:1fr} }
-@media print{ body>*:not(#printzone){display:none!important} #printzone{display:block!important} #printzone .paper{border:0;border-radius:0;padding:0} @page{margin:14mm} }
+@media print{ body>*:not(#printzone){display:none!important} #printzone{display:block!important} #printzone .paper{border:0;border-radius:0;padding:0} #printzone .pan{border:0;padding:0;break-inside:avoid} #printzone .kpis{grid-template-columns:repeat(4,1fr)} #printzone .kpi{border:1px solid #D5DBE3;background:#FFFFFF} #printzone .kpi b,#printzone .pan h2{color:#14202E} #printzone .muted{color:#566170} #printzone .chip{background:#FFFFFF;color:#14202E} @page{margin:14mm} }
 </style>
 </head>
 <body>
@@ -289,6 +289,6 @@ td.num{white-space:nowrap} .lines{min-width:680px} .lines td{padding:6px 6px;ver
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js?v=4"></script>
 <script src="app.js?v=11"></script>
-<script src="factu.js?v=5"></script>
+<script src="factu.js?v=6"></script>
 </body>
 </html>
