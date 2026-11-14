@@ -55,7 +55,7 @@ async function reload(){ await load(); render(); }
 T.nav = () => {
   const cnt = st => S.courses.filter(c=>c.statut===st).length;
   const L = (v,label,extra) => `<a href="#${v}" class="${S.view===v?"on":""}">${label}${extra||""}</a>`;
-  const sub = (st,label,n,hot) => `<a href="#courses" class="sub" data-fst="${st}">${label}<span class="cnt ${hot&&n?"hot":""}">${n}</span></a>`;
+  const sub = (st,label,n,hot) => `<a href="#courses" class="sub ${S.view==="courses"&&S.fStatut===st?"on-st":""}" data-fst="${st}"><span style="display:flex;align-items:center"><span class="pst" style="background:var(--dot-${st})" aria-hidden="true"></span>${label}</span><span class="cnt ${hot&&n?"hot":""}">${n}</span></a>`;
   const subv = (v,label,n,hot) => `<a href="#${v}" class="sub" ${S.view===v?'style="color:var(--side-fg);font-weight:700"':""}>${label}${n===undefined?"":`<span class="cnt ${hot&&n?"hot":""}">${n}</span>`}</a>`;
   const nb = (t,st) => F.pieces.filter(p=>p.type===t && (!st||p.statut===st)).length;
   return `<span class="grp">EXPLOITATION</span>`+L("planning","Planning")+L("courses","Transports")+

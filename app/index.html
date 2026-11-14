@@ -23,7 +23,7 @@ body{margin:0}
   --bg:#F4F6F9; --surface:#FFFFFF; --surface-2:#EEF1F5; --line:#DCE2EA; --fg:#18212D; --muted:#566170;
   --side:#1F3A5F; --side-fg:#FFFFFF; --side-muted:#B9C7D8; --side-hi:#2B4C75;
   --navy:#1F3A5F; --accent:#F28C28; --accent-ink:#A9520A; --accent-soft:#FFF1E3; --on-accent:#1B2430;
-  --plan-bg:#E4EBF4; --plan-bd:#1F3A5F; --sent-bg:#FFF1E3; --sent-bd:#F28C28;
+  --plan-bg:#EEE8FB; --plan-bd:#6B4FC4; --sent-bg:#FFF1E3; --sent-bd:#F28C28;
   --run-bg:#DCEBFA; --run-bd:#2563A8; --done-bg:#E2F1E7; --done-bd:#2E7D4F; --off-bg:#EEF1F5; --off-bd:#8C96A3;
   --danger:#B93A0E; --danger-soft:#FDE3D7; --ok:#24683F;
   --display:"Archivo",Arial,sans-serif; --text:"Inter",Arial,sans-serif;
@@ -33,14 +33,14 @@ body{margin:0}
   --bg:#0E1520; --surface:#16202D; --surface-2:#1D2938; --line:#2B3A4D; --fg:#E6ECF3; --muted:#9AA8B8;
   --side:#111C2A; --side-fg:#E6ECF3; --side-muted:#93A3B7; --side-hi:#1F3A5F;
   --navy:#9DBBE0; --accent:#F59A3E; --accent-ink:#F7B36B; --accent-soft:#3A2A18; --on-accent:#1B2430;
-  --plan-bg:#1F3045; --plan-bd:#8FB0D9; --sent-bg:#3A2A18; --sent-bd:#F59A3E;
+  --plan-bg:#2A2344; --plan-bd:#B79CF2; --sent-bg:#3A2A18; --sent-bd:#F59A3E;
   --run-bg:#16314F; --run-bd:#6AA5E6; --done-bg:#16352A; --done-bd:#5DBB85; --off-bg:#1D2938; --off-bd:#6B7787;
   --danger:#F08A6A; --danger-soft:#3D2018; --ok:#6CC795; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0E1520; --surface:#16202D; --surface-2:#1D2938; --line:#2B3A4D; --fg:#E6ECF3; --muted:#9AA8B8;
   --side:#111C2A; --side-fg:#E6ECF3; --side-muted:#93A3B7; --side-hi:#1F3A5F;
   --navy:#9DBBE0; --accent:#F59A3E; --accent-ink:#F7B36B; --accent-soft:#3A2A18; --on-accent:#1B2430;
-  --plan-bg:#1F3045; --plan-bd:#8FB0D9; --sent-bg:#3A2A18; --sent-bd:#F59A3E;
+  --plan-bg:#2A2344; --plan-bd:#B79CF2; --sent-bg:#3A2A18; --sent-bd:#F59A3E;
   --run-bg:#16314F; --run-bd:#6AA5E6; --done-bg:#16352A; --done-bd:#5DBB85; --off-bg:#1D2938; --off-bd:#6B7787;
   --danger:#F08A6A; --danger-soft:#3D2018; --ok:#6CC795; color-scheme:dark}
 *{box-sizing:border-box}
@@ -238,6 +238,11 @@ button.dot{background:var(--surface);cursor:pointer;padding:0;width:34px;height:
 
 
 /* ---- v2 : facturation, carnet d'adresses, paramètres ---- */
+/* couleurs d'état : une pastille dans le menu (fond bleu nuit dans les deux thèmes) et un liseré sur chaque ligne de la liste */
+:root{--dot-a_planifier:#AEB9C6;--dot-planifiee:#B79CF2;--dot-envoyee:#F2A04A;--dot-en_cours:#5FB0FF;--dot-terminee:#58C98A}
+.pst{width:10px;height:10px;border-radius:50%;flex:none;display:inline-block;margin-right:8px}
+.nav a.sub.on-st{color:var(--side-fg);font-weight:700}
+tr.strow td:first-child{box-shadow:inset 4px 0 0 var(--st-c)}
 .pan{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
 .pan h2{font-family:var(--display);font-size:17px;color:var(--navy);margin:0}
 .fin{width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface);min-height:38px}
@@ -283,7 +288,7 @@ td.num{white-space:nowrap} .lines{min-width:680px} .lines td{padding:6px 6px;ver
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=10"></script>
-<script src="factu.js?v=4"></script>
+<script src="app.js?v=11"></script>
+<script src="factu.js?v=5"></script>
 </body>
 </html>

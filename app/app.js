@@ -386,7 +386,7 @@ function vCourses(){
   const chips=[["tous","Toutes"],["a_planifier","À planifier"],["planifiee","Planifiées"],["envoyee","Envoyées"],["en_cours","En cours"],["terminee","Terminées"],["afacturer","À facturer"],["annulee","Annulées"]]
     .map(([k,l])=>`<button type="button" class="f ${S.fStatut===k?"on":""}" data-fst="${k}">${l} <span class="num">${cnt(k)}</span></button>`).join("");
   const rows=list.slice(0,300).map(c=>{ const m=[c.palettes&&c.palettes+" pal.",c.colis&&c.colis+" colis",c.poids&&Number(c.poids).toLocaleString("fr-FR")+" kg",c.metres&&c.metres+" m"].filter(Boolean).join(", ");
-    return `<tr class="click" data-open="${esc(c.id)}" tabindex="0"><td>${statChip(c)}</td>
+    return `<tr class="click strow" style="--st-c:var(--${({planifiee:"plan",envoyee:"sent",en_cours:"run",terminee:"done"})[c.statut]||"off"}-bd)" data-open="${esc(c.id)}" tabindex="0"><td>${statChip(c)}</td>
     <td><b>${esc(c.donneur||"—")}</b>${c.ref?`<div class="muted">Réf. ${esc(c.ref)}</div>`:""}</td>
     <td>${esc(c.enlNom||"")}<div class="muted">${esc(c.enlCp||"")} ${esc(c.enlVille||"")}</div></td>
     <td class="num">${esc(shortDate(c.enlDate))} ${esc(c.enlHeure||"")}${c.arriveeEnl?`<div class="muted">Réel : ${esc(c.arriveeEnl)}</div>`:""}</td>
