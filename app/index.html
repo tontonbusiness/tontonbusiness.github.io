@@ -4,13 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Tonton Planning</title>
+<meta name="robots" content="noindex">
 <meta name="description" content="Planning des courses, vue conducteur et indicateurs pour les entreprises de transport.">
 <meta name="theme-color" content="#1F3A5F">
-<link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Inter:wght@400;500;600;700&display=swap">
 <style>
@@ -235,6 +236,32 @@ button.dot{background:var(--surface);cursor:pointer;padding:0;width:34px;height:
 .side .foot{margin-top:auto;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--side-muted)}
 .side .foot button{background:transparent;border:1px solid var(--side-muted);color:var(--side-fg);border-radius:8px;padding:7px 10px;cursor:pointer}
 
+
+/* ---- v2 : facturation, carnet d'adresses, paramètres ---- */
+.pan{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.pan h2{font-family:var(--display);font-size:17px;color:var(--navy);margin:0}
+.fin{width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface);min-height:38px}
+.fin.num{text-align:right}
+td.num{white-space:nowrap} .lines{min-width:680px} .lines td{padding:6px 6px;vertical-align:middle} .kpi b{white-space:nowrap} .lines th{padding:6px 6px}
+.tot{display:grid;grid-template-columns:auto auto;gap:4px 18px;justify-content:end;font-size:14px}
+.tot b:last-child,.tot span:nth-child(even){text-align:right;font-variant-numeric:tabular-nums}
+.tot .big{font-size:18px;min-height:0;width:auto}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.late{border-color:var(--danger)!important;color:var(--danger);background:var(--danger-soft)}
+/* la facture est un document : toujours noir sur blanc, à l'écran comme à l'impression */
+.paper{background:#FFFFFF;color:#14202E;border:1px solid #D5DBE3;border-radius:6px;padding:28px;font-size:13px;line-height:1.45;display:flex;flex-direction:column;gap:18px;position:relative;overflow:hidden}
+.paper h3{font-size:22px;margin:0;color:#1F3A5F;letter-spacing:.02em}
+.paper .two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.paper .box{border:1px solid #D5DBE3;border-radius:6px;padding:10px 12px}
+.paper small{color:#566170}
+.paper table{font-size:13px} .paper th{color:#566170;border-bottom:2px solid #1F3A5F} .paper td{border-bottom:1px solid #E3E8EE}
+.paper .r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.paper .ptot{margin-left:auto;min-width:240px} .paper .ptot td{padding:4px 8px} .paper .ptot tr:last-child td{font-weight:700;font-size:15px;border-top:2px solid #1F3A5F;border-bottom:0}
+.paper .legal{font-size:11px;color:#566170;border-top:1px solid #D5DBE3;padding-top:10px}
+.paper .wm{position:absolute;top:38%;left:0;right:0;text-align:center;font-size:64px;font-weight:800;color:rgba(185,58,14,.14);transform:rotate(-18deg);pointer-events:none}
+#printzone{display:none}
+@media (max-width:600px){ .paper{padding:14px} .paper .two-col{grid-template-columns:1fr} }
+@media print{ body>*:not(#printzone){display:none!important} #printzone{display:block!important} #printzone .paper{border:0;border-radius:0;padding:0} @page{margin:14mm} }
 </style>
 </head>
 <body>
@@ -256,6 +283,7 @@ button.dot{background:var(--surface);cursor:pointer;padding:0;width:34px;height:
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
+<script src="factu.js?v=3"></script>
 </body>
 </html>

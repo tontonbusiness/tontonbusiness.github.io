@@ -94,6 +94,7 @@ async function loadData(){
     if(S.incN!=null && n>S.incN){ const c=S.courses.filter(x=>incNew(x).length).sort((x,y)=>String(incNew(y).slice(-1)[0].le).localeCompare(String(incNew(x).slice(-1)[0].le)))[0];
       const i=c&&incNew(c).slice(-1)[0]; if(i) toast(`Problème signalé par ${condById(c.conducteurId)?.nom||"un conducteur"} : ${INC[i.type]||"Autre"}`); }
     S.incN=n; }
+  if(isStaff()) for(const f of X.onData){ try{ await f(); }catch(e){ console.error(e); } }
   S.loaded=true; render();
 }
 let channel=null;
@@ -136,7 +137,7 @@ const aFacturer = c => c.statut==="terminee" && !c.facturee;
 
 /* ---------- navigation ---------- */
 const VIEWS = ["planning","courses","indicateurs","conducteur","parametres"];
-function readHash(){ const h=(location.hash||"").replace("#",""); S.view = VIEWS.includes(h)?h:"planning"; if(MODE==="chauffeur" || (S.mem && !isStaff())) S.view="conducteur"; }
+function readHash(){ const h=(location.hash||"").replace("#",""); S.view = (VIEWS.includes(h)||X.views[h])?h:"planning"; if(MODE==="chauffeur" || (S.mem && !isStaff())) S.view="conducteur"; }
 window.addEventListener("hashchange",()=>{ readHash(); render(); window.scrollTo(0,0); });
 
 function renderNav(){
@@ -144,6 +145,7 @@ function renderNav(){
   const af = S.courses.filter(aFacturer).length;
   const L = (v,label) => `<a href="#${v}" class="${S.view===v?"on":""}">${label}</a>`;
   const sub = (st,label,n,hot) => `<a href="#courses" class="sub" data-fst="${st}">${label}<span class="cnt ${hot&&n?"hot":""}">${n}</span></a>`;
+  if(X.nav){ $("#nav").innerHTML = X.nav(); $("#coName").textContent = S.entreprise?.nom || "Exploitation"; $("#whoami").textContent = S.session?.user?.email || ""; return; }
   $("#nav").innerHTML =
     `<span class="grp">EXPLOITATION</span>`+L("planning","Planning")+L("courses","Courses")+
     sub("a_planifier","À planifier",cnt("a_planifier"),true)+sub("planifiee","Planifiées",cnt("planifiee"))+
@@ -162,11 +164,13 @@ function render(){
   $("#side").hidden = !isStaff() || S.view==="conducteur";
   if(isStaff()) renderNav();
   if(!S.loaded){ v.innerHTML=`<div class="empty">Chargement des courses…</div>`; return; }
-  const fn = {planning:vPlanning, courses:vCourses, indicateurs:vIndic, conducteur:vDriver, parametres:vParams}[S.view];
+  const fn = {planning:vPlanning, courses:vCourses, indicateurs:vIndic, conducteur:vDriver, parametres:vParams}[S.view] || X.views[S.view];
   v.innerHTML = fn();
   after[S.view] && after[S.view]();
 }
 const after = {};
+/* points d'accroche pour les modules complémentaires (facturation, carnet d'adresses…) */
+const X = { views:{}, nav:null, onData:[], after, S, sb, $, esc, toast, errMsg, openModal, closeModal, render, loadData, EID, isStaff, frDate, todayIso, addDays };
 
 /* ---------- CONNEXION ---------- */
 function authShell(inner){ const img = MODE==="chauffeur" ? `<img src="icon-192.png" alt="" style="border-radius:12px">` : `<img src="../logo-blanc.png" alt="Tonton Business">`;
@@ -425,7 +429,7 @@ function courseForm(c,opts={}){
     <label class="fld">Livré<input type="time" id="f_livre" value="${esc(c.livre||"")}"></label>
     <label class="fld wide">Réserves à la livraison<textarea id="f_reserve" placeholder="Vide = sans réserve">${esc(c.reserve||"")}</textarea></label></fieldset>`}
   <fieldset><legend>Consignes</legend>${grp("i")}</fieldset>
-  ${incHtml}${sigHtml}
+  ${incHtml}${sigHtml}${c.id&&X.courseExtra?X.courseExtra(c):""}
   ${docs?`<div><b>Documents</b><ul style="margin:6px 0 0">${docs}</ul></div>`:""}
   <div class="row-btns" id="formBtns">
     ${opts.canDelete?`<button type="button" class="btn btn-danger" data-act="askdel" style="margin-right:auto">Supprimer</button>`:""}
@@ -943,12 +947,15 @@ function signaler(){ // « Dernière connexion » visible par l'exploitation
 }
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") signaler(); });
 sb.auth.onAuthStateChange((event)=>{ if(event==="PASSWORD_RECOVERY"){ S.recovery=true; render(); } });
-(async()=>{
+window.TP = X;
+// démarrage après le chargement des modules complémentaires
+const demarrer = async()=>{
   const params=new URLSearchParams(location.search);
   const code=params.get("code");
   if(code && MODE==="chauffeur"){ // icône installée : déjà rattaché → on ouvre directement le programme
     await boot(); if(!S.mem) await joinWithCode(code); return; }
   if(code){ history.replaceState(null,"",location.pathname); await joinWithCode(code); return; }
   await boot();
-})();
+};
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",demarrer); else demarrer();
 })();

@@ -26,9 +26,13 @@ const clientByName = n => F.clients.find(c=>norm(c.nom)===norm(n));
 const pris = () => { const s=new Set(); F.pieces.filter(p=>p.type==="facture").forEach(p=>(p.lignes||[]).forEach(l=>l.course_id&&s.add(l.course_id))); return s; };
 const aFact = () => { const s=pris(); return S.courses.filter(c=>c.statut==="terminee" && !c.facturee && !s.has(c.id)); };
 const enRetard = p => p.type==="facture" && p.statut==="finalisee" && p.date_echeance && p.date_echeance<todayIso();
-function chip(p){ const m={ brouillon:["Brouillon","st-a_planifier"], finalisee:[p.type==="avoir"?"Émis":"À encaisser","st-envoyee"], payee:["Payée","st-terminee"], envoye:["Envoyé","st-envoyee"], accepte:["Accepté","st-terminee"], refuse:["Refusé","st-annulee"] }[p.statut]||[p.statut,""];
-  return enRetard(p) ? `<span class="chip late">En retard</span>` : `<span class="chip ${m[1]}">${m[0]}</span>`; }
+function chip(p){ const m={ brouillon:["Brouillon","st-a_planifier"], finalisee:[p.type==="avoir"?"Finalisé":"Finalisée","st-envoyee"], payee:["Payée","st-terminee"], envoye:["Envoyé","st-envoyee"], accepte:["Accepté","st-terminee"], refuse:["Refusé","st-annulee"] }[p.statut]||[p.statut,""];
+  return enRetard(p) ? `<span class="chip late">À relancer</span>` : `<span class="chip ${m[1]}">${m[0]}</span>`; }
 const numero = p => p.numero || "Brouillon";
+const joursRetard = p => p.date_echeance ? Math.max(0, Math.round((new Date(todayIso()+"T00:00:00") - new Date(p.date_echeance+"T00:00:00"))/864e5)) : 0;
+const rels = p => Array.isArray(p.relances) ? p.relances : [];
+const relTxt = p => { const r=rels(p); return r.length ? `${r.length} relance${r.length>1?"s":""} · dernière le ${d2(r[r.length-1].le)}` : ""; };
+const NIV = { 1:"Rappel amiable", 2:"Relance ferme", 3:"Dernier rappel avant mise en demeure" };
 const off = () => `<div class="bar"><h1>Facturation</h1></div><div class="pan"><b>La facturation n'est pas encore activée sur cette base.</b><span class="muted">${esc(F.err||"La mise à jour de la base de données n'a pas encore été appliquée.")}</span></div>`;
 
 /* ---------- chargement ---------- */
@@ -58,7 +62,7 @@ T.nav = () => {
     sub("a_planifier","À planifier",cnt("a_planifier"),true)+sub("planifiee","Planifiés",cnt("planifiee"))+sub("envoyee","Envoyés",cnt("envoyee"))+
     sub("en_cours","En cours",cnt("en_cours"))+sub("terminee","Terminés",cnt("terminee"))+L("conducteur","Vue conducteur")+
     `<span class="grp">FACTURATION</span>`+L("devis","Devis")+L("factures","Facturation de ventes")+
-    subv("afacturer","Transports à facturer",F.ready?aFact().length:0,true)+subv("factures","Factures",nb("facture"))+subv("avoirs","Avoirs",nb("avoir"))+
+    subv("afacturer","Transports à facturer",F.ready?aFact().length:0,true)+subv("factures","Factures",nb("facture"))+subv("relances","Relances clients",F.pieces.filter(enRetard).length,true)+subv("avoirs","Avoirs",nb("avoir"))+
     `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+L("reglages","Paramètres");
 };
 
@@ -109,31 +113,76 @@ T.courseExtra = c => {
 function listView(type){
   if(!F.ready) return off();
   const lab=LAB[type]; const all=F.pieces.filter(p=>p.type===type); const f=F.filtre[type];
-  const sts = type==="facture" ? [["tous","Toutes"],["brouillon","Brouillons"],["finalisee","À encaisser"],["retard","En retard"],["payee","Payées"]]
-            : type==="devis" ? [["tous","Tous"],["brouillon","Brouillons"],["envoye","Envoyés"],["accepte","Acceptés"],["refuse","Refusés"]] : [["tous","Tous"],["brouillon","Brouillons"],["finalisee","Émis"]];
-  const L=all.filter(p=> f==="tous" ? true : f==="retard" ? enRetard(p) : p.statut===f);
+  const sts = type==="facture" ? [["tous","Toutes"],["brouillon","Brouillons"],["finalisee","Finalisées"],["retard","À relancer"],["payee","Payées"]]
+            : type==="devis" ? [["tous","Tous"],["brouillon","Brouillons"],["envoye","Envoyés"],["accepte","Acceptés"],["refuse","Refusés"]] : [["tous","Tous"],["brouillon","Brouillons"],["finalisee","Finalisés"]];
+  const L=all.filter(p=> f==="tous" ? true : f==="retard" ? enRetard(p) : f==="finalisee" ? (p.statut==="finalisee" && !enRetard(p)) : p.statut===f);
   const sum=(arr,k)=>arr.reduce((s,p)=>s+Number(p[k]||0),0);
   const mois=todayIso().slice(0,7);
   const kpis = type==="facture" ? `<div class="kpis">
       <a class="kpi" href="#afacturer" style="text-decoration:none;color:inherit"><small>À facturer</small><b class="num">${aFact().length}</b></a>
       <div class="kpi"><small>Brouillons</small><b class="num">${all.filter(p=>p.statut==="brouillon").length}</b></div>
-      <div class="kpi"><small>À encaisser (TTC)</small><b class="num">${money(sum(all.filter(p=>p.statut==="finalisee"),"total_ttc"))}</b></div>
-      <div class="kpi ${all.some(enRetard)?"bad":""}"><small>En retard (TTC)</small><b class="num">${money(sum(all.filter(enRetard),"total_ttc"))}</b></div>
+      <div class="kpi"><small>Finalisées, à encaisser (TTC)</small><b class="num">${money(sum(all.filter(p=>p.statut==="finalisee"&&!enRetard(p)),"total_ttc"))}</b></div>
+      <a class="kpi ${all.some(enRetard)?"bad":""}" href="#relances" style="text-decoration:none;color:inherit"><small>À relancer (TTC)</small><b class="num">${money(sum(all.filter(enRetard),"total_ttc"))}</b></a>
       <div class="kpi"><small>Encaissé ce mois (TTC)</small><b class="num">${money(sum(all.filter(p=>p.statut==="payee"&&String(p.paye_le||"").slice(0,7)===mois),"total_ttc"))}</b></div></div>` : "";
   return `<div class="bar"><h1>${lab.pl}</h1>${type==="facture"?`<a class="btn btn-accent" href="#afacturer">Facturer des transports</a><button type="button" class="btn btn-navy" data-f="new" data-type="facture">+ Facture libre (sans transport)</button>`:lab.neuf?`<button type="button" class="btn btn-accent" data-f="new" data-type="${type}">+ ${lab.neuf}</button>`:""}</div>
   ${type==="facture"?`<span class="muted" style="font-size:13px"><b>Deux façons de facturer :</b> « Facturer des transports » reprend les transports terminés (une ligne par transport, qui passe ensuite en « facturé »). « Facture libre » sert pour tout le reste : location, immobilisation, frais divers, prestation sans transport saisi.</span>`:""}
   ${kpis}
   <div class="seg" role="group" aria-label="Filtre" style="align-self:flex-start;flex-wrap:wrap">${sts.map(([k,l])=>`<button type="button" class="${f===k?"on":""}" data-f="filtre" data-type="${type}" data-v="${k}">${l}</button>`).join("")}</div>
-  <div class="pan"><div class="tbl-wrap"><table><thead><tr><th>Numéro</th><th>Client</th>${type==="facture"?"<th>Origine</th>":""}<th>Date</th>${type==="avoir"?"<th>Facture d'origine</th>":`<th>${type==="devis"?"Valable jusqu'au":"Échéance"}</th>`}<th style="text-align:right">Total HT</th><th style="text-align:right">Total TTC</th><th>Statut</th></tr></thead><tbody>
+  <div class="pan"><div class="tbl-wrap"><table><thead><tr><th>Numéro</th><th>Client</th>${type==="facture"?"<th>Origine</th>":""}<th>Date</th>${type==="avoir"?"<th>Facture d'origine</th>":`<th>${type==="devis"?"Valable jusqu'au":"Échéance"}</th>`}<th style="text-align:right">Total HT</th><th style="text-align:right">Total TTC</th><th>État</th>${type==="facture"?"<th>Relances</th>":""}</tr></thead><tbody>
   ${L.length?L.map(p=>{ const cn=(p.client&&p.client.nom)||clientById(p.client_id)?.nom||"—"; const t=p.statut==="brouillon"?totals(p.lignes):{ht:p.total_ht,ttc:p.total_ttc};
     return `<tr class="click" tabindex="0" data-f="open" data-id="${esc(p.id)}"><td><b>${esc(numero(p))}</b></td><td>${esc(cn)}</td>${type==="facture"?`<td>${nbTransports(p)?`${nbTransports(p)} transport${nbTransports(p)>1?"s":""}`:`<span class="muted">Libre</span>`}</td>`:""}<td class="num">${d2(p.date_emission||p.created_at)}</td>
-    <td class="num">${type==="avoir"?esc(F.pieces.find(x=>x.id===p.origine_id)?.numero||"—"):d2(p.date_echeance)}</td><td class="num" style="text-align:right">${money(t.ht)}</td><td class="num" style="text-align:right">${money(t.ttc)}</td><td>${chip(p)}</td></tr>`; }).join("")
-   :`<tr><td colspan="8"><div class="empty">${all.length?"Aucune pièce pour ce filtre.":type==="avoir"?"Aucun avoir. Un avoir se crée depuis une facture finalisée, pour l'annuler ou la corriger.":type==="facture"?"Aucune facture pour l'instant. Utilisez « Facturer des transports » ou « Facture libre ».":"Aucun devis pour l'instant."}</div></td></tr>`}
+    <td class="num">${type==="avoir"?esc(F.pieces.find(x=>x.id===p.origine_id)?.numero||"—"):d2(p.date_echeance)}</td><td class="num" style="text-align:right">${money(t.ht)}</td><td class="num" style="text-align:right">${money(t.ttc)}</td><td>${chip(p)}</td>${type==="facture"?`<td>${relTxt(p)}</td>`:""}</tr>`; }).join("")
+   :`<tr><td colspan="9"><div class="empty">${all.length?"Aucune pièce pour ce filtre.":type==="avoir"?"Aucun avoir. Un avoir se crée depuis une facture finalisée, pour l'annuler ou la corriger.":type==="facture"?"Aucune facture pour l'instant. Utilisez « Facturer des transports » ou « Facture libre ».":"Aucun devis pour l'instant."}</div></td></tr>`}
   </tbody></table></div></div>`;
 }
 T.views.factures = () => listView("facture");
 T.views.avoirs = () => listView("avoir");
 T.views.devis = () => listView("devis");
+
+/* ---------- RELANCES CLIENTS ---------- */
+function retardsParClient(){ const g={}; F.pieces.filter(enRetard).forEach(p=>{ const k=p.client_id||"?"; (g[k]=g[k]||[]).push(p); });
+  return Object.keys(g).map(k=>({ id:k, nom:(g[k][0].client&&g[k][0].client.nom)||clientById(k)?.nom||"Client", fact:g[k].sort((a,b)=>a.date_echeance.localeCompare(b.date_echeance)) }))
+    .sort((a,b)=>joursRetard(b.fact[0])-joursRetard(a.fact[0])); }
+T.views.relances = () => {
+  if(!F.ready) return off();
+  const G=retardsParClient(); const all=G.flatMap(g=>g.fact); const tot=all.reduce((s,p)=>s+Number(p.total_ttc||0),0);
+  const jamais=all.filter(p=>!rels(p).length).length;
+  return `<div class="bar"><h1>Relances clients</h1></div>
+  <span class="muted" style="font-size:13px">Les factures finalisées dont l'échéance est dépassée et qui ne sont pas marquées payées. Une relance regroupe toutes les factures en retard d'un même client.</span>
+  <div class="kpis"><div class="kpi ${all.length?"bad":""}"><small>Factures à relancer</small><b class="num">${all.length}</b></div><div class="kpi"><small>Montant dû (TTC)</small><b class="num">${money(tot)}</b></div><div class="kpi"><small>Clients concernés</small><b class="num">${G.length}</b></div><div class="kpi"><small>Jamais relancées</small><b class="num">${jamais}</b></div></div>
+  ${G.length?G.map(g=>{ const st=g.fact.reduce((s,p)=>s+Number(p.total_ttc||0),0); const cl=clientById(g.id);
+    return `<div class="pan"><div class="bar"><h2 style="flex:1">${esc(g.nom)}</h2><span class="muted">${g.fact.length} facture${g.fact.length>1?"s":""} · ${money(st)} TTC · jusqu'à ${joursRetard(g.fact[0])} j de retard</span><button type="button" class="btn btn-accent" data-f="relance" data-client="${esc(g.id)}">Relancer ce client</button></div>
+    ${cl&&!cl.email?`<span class="muted" style="font-size:12px">Pas d'e-mail de facturation dans la fiche de ce client : ajoutez-le dans le carnet d'adresses pour préremplir le destinataire.</span>`:""}
+    <div class="tbl-wrap"><table><thead><tr><th>Facture</th><th>Date</th><th>Échéance</th><th>Retard</th><th style="text-align:right">Total TTC</th><th>Relances</th><th></th></tr></thead><tbody>${g.fact.map(p=>`<tr><td><b>${esc(p.numero)}</b></td><td class="num">${d2(p.date_emission)}</td><td class="num">${d2(p.date_echeance)}</td><td><span class="chip late">${joursRetard(p)} j</span></td><td class="num" style="text-align:right">${money(p.total_ttc)}</td><td>${relTxt(p)||`<span class="muted">Aucune</span>`}</td><td><button type="button" class="linkbtn" data-f="open" data-id="${esc(p.id)}">Ouvrir</button></td></tr>`).join("")}</tbody></table></div></div>`; }).join("")
+   :`<div class="pan"><div class="empty">Aucune facture à relancer : tout est payé ou pas encore échu.</div></div>`}`;
+};
+function relanceMsg(g, niv){
+  const money = n => (Number(n)||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/[\u202f\u00a0]/g," ")+" €"; // espaces simples pour les messageries
+  const so=F.param.societe; const n=g.fact.length; const tot=g.fact.reduce((s,p)=>s+Number(p.total_ttc||0),0);
+  const liste=g.fact.map(p=>`- Facture n° ${p.numero} du ${d2(p.date_emission)}, échue le ${d2(p.date_echeance)} : ${money(p.total_ttc)} TTC`).join("\n");
+  const objet = niv===1 ? `Rappel — ${n>1?n+" factures en attente de règlement":"facture "+g.fact[0].numero+" en attente de règlement"}` : niv===2 ? `Relance — ${n>1?n+" factures impayées":"facture "+g.fact[0].numero+" impayée"}` : `Dernier rappel avant mise en demeure — ${n>1?n+" factures impayées":"facture "+g.fact[0].numero}`;
+  const intro = niv===1 ? `Sauf erreur ou omission de notre part, ${n>1?"les factures suivantes restent":"la facture suivante reste"} à régler à ce jour :`
+    : niv===2 ? `Malgré notre précédent rappel, nous n'avons pas reçu le règlement ${n>1?"des factures suivantes":"de la facture suivante"} :`
+    : `Malgré nos relances, ${n>1?"les factures suivantes demeurent impayées":"la facture suivante demeure impayée"} :`;
+  const suite = niv===1 ? `Nous vous remercions de bien vouloir procéder au règlement dans les meilleurs délais.`
+    : niv===2 ? `Nous vous demandons de procéder au règlement sous 8 jours.`
+    : `Sans règlement de votre part sous 8 jours, nous serons contraints de vous adresser une mise en demeure par lettre recommandée. Nous vous rappelons que les pénalités de retard et l'indemnité forfaitaire de 40 € pour frais de recouvrement, mentionnées sur nos factures, sont exigibles.`;
+  const corps = `Bonjour,\n\n${intro}\n\n${liste}\n\nTotal dû : ${money(tot)} TTC\n\n${suite}${so.iban?`\n\nRèglement par virement — IBAN : ${so.iban}${so.bic?" — BIC : "+so.bic:""}`:""}\n\nSi votre règlement a été effectué entre-temps, merci de ne pas tenir compte de ce message.\n\nCordialement,\n${so.nom||""}${so.tel?"\n"+so.tel:""}`;
+  return { objet, corps };
+}
+function openRelance(clientId){
+  const g=retardsParClient().find(x=>x.id===clientId); if(!g){ toast("Ce client n'a plus de facture à relancer."); return; }
+  const deja=Math.max(0,...g.fact.map(p=>rels(p).length)); const niv=Math.min(3,deja+1); const cl=clientById(clientId)||{}; const m=relanceMsg(g,niv);
+  F.relance={ id:clientId, niv };
+  openModal(`<div data-lock="keep" style="display:flex;flex-direction:column;gap:12px"><h2>Relancer ${esc(g.nom)}</h2>
+    <span class="muted">${g.fact.length} facture${g.fact.length>1?"s":""} en retard · ${deja?deja+" relance"+(deja>1?"s":"")+" déjà enregistrée"+(deja>1?"s":""):"aucune relance enregistrée"}.</span>
+    <div class="fgrid"><label class="fld">Niveau de la relance<select class="fin" id="rNiv">${[1,2,3].map(k=>`<option value="${k}" ${k===niv?"selected":""}>${k}. ${NIV[k]}</option>`).join("")}</select></label>
+      <label class="fld">E-mail du client<input class="fin" type="email" id="rMail" value="${esc(cl.email||"")}" placeholder="À compléter"></label></div>
+    <label class="fld">Objet<input class="fin" id="rObj" value="${esc(m.objet)}"></label>
+    <label class="fld">Message (modifiable)<textarea class="fin" id="rTxt" rows="12">${esc(m.corps)}</textarea></label>
+    <span class="muted" style="font-size:12px">L'envoi se fait depuis votre messagerie : « Ouvrir dans ma messagerie » prépare l'e-mail, ou copiez le message. Cliquez ensuite sur « Enregistrer la relance » pour en garder la trace sur les factures.</span>
+    <div class="row-btns"><button type="button" class="btn btn-ghost" data-act="close" style="margin-right:auto">Fermer</button><button type="button" class="btn btn-ghost" data-f="rcopy">Copier le message</button><button type="button" class="btn btn-navy" data-f="rmail">Ouvrir dans ma messagerie</button><button type="button" class="btn btn-accent" data-f="rsave">Enregistrer la relance</button></div></div>`);
+}
 
 /* ---------- le document (aperçu écran + impression) ---------- */
 function paper(p){
@@ -168,6 +217,7 @@ function openPiece(id){
         (orig?`<button type="button" class="btn btn-ghost" data-f="open" data-id="${esc(orig.id)}">Voir l'avoir ${esc(orig.numero||"(brouillon)")}</button>`:`<button type="button" class="btn btn-ghost" data-f="avoir">Créer un avoir</button>`)
     : p.type==="devis" ? `<span style="margin-right:auto">${chip(p)}</span>${p.statut!=="accepte"?`<button type="button" class="btn btn-ghost" data-f="dstat" data-v="accepte">Accepté par le client</button>`:""}${p.statut!=="refuse"?`<button type="button" class="btn btn-ghost" data-f="dstat" data-v="refuse">Refusé</button>`:""}<button type="button" class="btn btn-navy" data-f="tofact">Transformer en facture</button>` : "";
   openModal(`<div data-lock="1" style="display:flex;flex-direction:column;gap:14px"><div class="bar"><h2 style="flex:1">${LAB[p.type].un} ${esc(p.numero||"")}</h2>${chip(p)}</div>
+    ${enRetard(p)?`<div class="alert" style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span><b>À relancer :</b> échéance dépassée de ${joursRetard(p)} jour${joursRetard(p)>1?"s":""}. ${relTxt(p)||"Aucune relance envoyée."}</span><button type="button" class="btn btn-ghost btn-sm" data-f="relance" data-client="${esc(p.client_id||"")}">Relancer le client</button></div>`:""}
     ${paper(p)}
     <div class="row-btns" style="align-items:flex-end">${acts}<button type="button" class="btn btn-ghost" data-f="print">Imprimer / PDF</button><button type="button" class="btn btn-accent" data-act="close">Fermer</button></div></div>`);
 }
@@ -298,6 +348,15 @@ document.addEventListener("click", async e=>{
   else if(a==="tofact"){ const p=cur(); const lignes=(p.lignes||[]).map(l=>({designation:l.designation,qte:Number(l.qte)||0,pu:Number(l.pu)||0,tva:Number(l.tva)||0})); const t=totals(lignes);
     const r=await newPiece("facture",{client_id:p.client_id,lignes,total_ht:t.ht,total_tva:t.tva,total_ttc:t.ttc,notes:`Selon devis ${p.numero}`}); if(r.error){ toast(fErr(r.error)); return; }
     await load(); location.hash="factures"; render(); openPiece(r.data.id); }
+  else if(a==="relance"){ openRelance(d.client); }
+  else if(a==="rcopy"){ const t=$("#rObj").value+"\n\n"+$("#rTxt").value; try{ await navigator.clipboard.writeText(t); toast("Message copié"); }catch(err){ $("#rTxt").select(); toast("Copie impossible ici : le message est sélectionné, faites Ctrl+C."); } }
+  else if(a==="rmail"){ const to=$("#rMail").value.trim(); if(!to){ toast("Indiquez l'e-mail du client."); $("#rMail").focus(); return; }
+    location.href="mailto:"+encodeURIComponent(to)+"?subject="+encodeURIComponent($("#rObj").value)+"&body="+encodeURIComponent($("#rTxt").value); }
+  else if(a==="rsave"){ const g=retardsParClient().find(x=>x.id===F.relance.id); if(!g) return; el.disabled=true; const niv=Number($("#rNiv").value)||1;
+    const res=await Promise.all(g.fact.map(p=>sb.from("pieces").update({relances:rels(p).concat([{le:todayIso(),niveau:niv}])}).eq("id",p.id)));
+    const bad=res.find(r=>r.error); if(bad){ toast(fErr(bad.error)); el.disabled=false; return; }
+    const mail=$("#rMail").value.trim(); const cl=clientById(g.id); if(mail && cl && !cl.email) await sb.from("clients").update({email:mail}).eq("id",cl.id);
+    closeModal(); toast(`Relance enregistrée sur ${g.fact.length} facture${g.fact.length>1?"s":""}`); reload(); }
   else if(a==="cnew"){ clientForm({nom:d.nom||""}); }
   else if(a==="copen"){ const c=clientById(d.id); if(c) clientForm(c); }
   else if(a==="cdel"){ if(!el.dataset.ok){ el.dataset.ok="1"; el.textContent="Confirmer la suppression"; return; } const {error}=await sb.from("clients").delete().eq("id",F.clientId); if(error){ toast(fErr(error)); return; } closeModal(); toast("Client supprimé"); reload(); }
@@ -313,6 +372,7 @@ document.addEventListener("input", e=>{
   const t=$("#fTot"); if(t) t.innerHTML=totHtml(totals(F.draft.lignes));
 });
 document.addEventListener("change", e=>{
+  if(e.target.id==="rNiv" && F.relance){ const g=retardsParClient().find(x=>x.id===F.relance.id); if(g){ const m=relanceMsg(g,Number(e.target.value)); $("#rObj").value=m.objet; $("#rTxt").value=m.corps; } return; }
   if(e.target.id!=="fAddCourse" || !F.draft || !e.target.value) return;
   const c=S.courses.find(x=>x.id===e.target.value); if(!c) return;
   readDraft(); const vide=F.draft.lignes.length===1 && !String(F.draft.lignes[0].designation||"").trim() && !Number(F.draft.lignes[0].pu);
