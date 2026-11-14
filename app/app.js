@@ -483,7 +483,7 @@ function vCourses(){
 }
 function statChip(c){ const st=c.statut||"a_planifier"; let x=`<span class="chip st-${esc(st)}">${esc(STATUTS[st]?.l||st)}</span>`;
   if(c.reserve) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Réserve</span></div>`;
-  if(st==="envoyee" && c.conducteurId && ("vuLe" in c)) x+=`<div style="margin-top:4px;font-size:12px;font-weight:600;color:var(--${c.vuLe?"ok":"accent-ink"})">${c.vuLe?"Vue par le chauffeur · "+esc(new Date(c.vuLe).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})):"Pas encore vue"}</div>`;
+  if(st==="envoyee" && c.conducteurId && ("vuLe" in c)) x+=`<div style="margin-top:4px;font-size:12px;font-weight:600;color:var(--${c.vuLe?"ok":"accent-ink"})">${c.vuLe?"Vue par le chauffeur · "+esc(new Date(c.vuLe).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})):`Pas encore vue <button type="button" class="linkbtn" data-act="relancer" data-id="${esc(c.id)}" style="font-size:12px;margin-left:6px">Relancer</button>`}</div>`;
   if(st==="planifiee" && c.sousTraitantId) x+=`<div class="muted" style="margin-top:4px;font-size:12px">Sous-traitée</div>`;
   if(st==="planifiee" && c.conducteurId) x+=`<div style="margin-top:6px"><button type="button" class="btn btn-accent btn-sm" data-act="sendone" data-id="${esc(c.id)}">Envoyer</button></div>`;
   if(incNew(c).length) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Problème signalé</span></div>`;
@@ -998,6 +998,9 @@ document.addEventListener("click",async e=>{
   else if(d.act==="import"){ startImport(); }
   else if(d.act==="close"){ closeModal(); }
   else if(d.act==="send"){ sendPlanning(); }
+  else if(d.act==="relancer"){ const c=S.courses.find(x=>x.id===d.id); if(!c) return; const k=condById(c.conducteurId);
+    const {data,error}=await sb.functions.invoke("envoyer-push",{body:{courses:[c.id]}});
+    toast(error?"Notification impossible pour le moment.":(data&&data.envoyes>0?`Notification renvoyée sur le téléphone de ${k?k.nom:"le conducteur"}`:`${k?k.nom:"Le conducteur"} n'a pas encore activé les notifications dans Dream Chauffeur.`)); }
   else if(d.act==="sendone"){ const c=S.courses.find(x=>x.id===d.id); if(!c||!c.conducteurId) return; const prev={statut:c.statut,envoyeLe:c.envoyeLe||null};
     if(await patchCourse(c.id,Object.assign({statut:"envoyee",envoyeLe:new Date().toISOString(),modifieApresEnvoi:false},("vuLe" in c)?{vuLe:null}:{}))) annonceEnvoi([c],{id:c.id,prev}); }
   else if(d.act==="undosend"){ const u=S.undoSend; if(!u) return; S.undoSend=null; if(await patchCourse(u.id,u.prev)) toast("Envoi annulé"); }
