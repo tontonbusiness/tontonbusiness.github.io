@@ -53,6 +53,7 @@ const EID = () => S.mem && S.mem.entreprise_id;
 
 /* ---------- toast ---------- */
 let tt; function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true,3600); }
+function toastAct(html,ms){ const t=$("#toast"); t.innerHTML=html; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true,ms||12000); }
 function errMsg(e){ const m=(e&&(e.message||e.error_description||e.msg))||"";
   if(/code_invalide/.test(m)) return "Ce code n'est pas valable. Vérifie-le, ou demande un nouveau code à ton exploitation.";
   if(/deja_exploitant/.test(m)) return "Ce navigateur est connecté avec un compte d'exploitation. Ouvrez Dream Chauffeur sur le téléphone du conducteur.";
@@ -308,14 +309,14 @@ function vPlanning(){
   const nCond = conds.filter(c=>!isRepos(c,S.date)).length;
   const engaged = new Set(day.filter(c=>c.conducteurId&&c.statut!=="a_planifier").map(c=>c.conducteurId)).size;
   const caDay = day.reduce((s,c)=>s+(Number(c.prix)||0),0);
-  const toSend = day.filter(c=>c.statut==="planifiee" && c.conducteurId).length;
+  const toSend = aEnvoyer().length;
   return `<div class="bar"><h1>Planning</h1>
     <div class="datebox"><button type="button" aria-label="Jour précédent" data-day="-1">‹</button>
       <label style="display:flex;align-items:center"><span style="position:absolute;left:-9999px">Date</span><input type="date" id="pDate" value="${S.date}"></label>
       <button type="button" aria-label="Jour suivant" data-day="1">›</button></div>
     <button type="button" class="btn btn-ghost btn-sm" data-day="0">Aujourd'hui</button>
     <div class="seg" role="group" aria-label="Affichage"><button type="button" class="${S.mode==="conducteur"?"on":""}" data-mode="conducteur">Par conducteur</button><button type="button" class="${S.mode==="camion"?"on":""}" data-mode="camion">Par véhicule</button></div>
-    <button type="button" class="btn btn-accent" data-act="send">Envoyer le planning${toSend?` (${toSend})`:""}</button></div>
+    ${toSend?`<button type="button" class="btn btn-accent" data-act="send">Tout envoyer (${toSend})</button>`:""}</div>
   <p class="muted" style="margin:0">${esc(frDate(S.date))}</p>
   <div class="kpis">
     <div class="kpi"><small>Courses du jour</small><b class="num">${day.length}</b></div>
@@ -362,15 +363,33 @@ async function assign(id,target){
   else patch.camionId=target;
   const cam=patch.camionId||c.camionId;
   if(cam && isTracteur(cam) && !c.remorqueId && camById(cam)?.remorqueId) patch.remorqueId=camById(cam).remorqueId;
-  if(!c.statut || c.statut==="a_planifier") patch.statut="planifiee";
-  if(c.statut==="envoyee") patch.modifieApresEnvoi=true;
-  if(await patchCourse(id,patch)) toast("Course affectée"+(c.statut==="envoyee"?" — pensez à renvoyer le planning":""));
+  // affecter à un conducteur = lui envoyer la course tout de suite (annulable quelques secondes)
+  const avant=c.statut||"a_planifier", chauffeur=patch.conducteurId||c.conducteurId;
+  const prev={conducteurId:c.conducteurId||null,camionId:c.camionId||null,remorqueId:c.remorqueId||null,statut:avant,envoyeLe:c.envoyeLe||null};
+  if(chauffeur && (avant==="a_planifier"||avant==="planifiee")){ patch.statut="envoyee"; patch.envoyeLe=new Date().toISOString(); patch.modifieApresEnvoi=false; }
+  else if(avant==="a_planifier") patch.statut="planifiee";
+  if(!(await patchCourse(id,patch))) return;
+  if(patch.statut==="envoyee" || (avant==="envoyee" && patch.conducteurId && patch.conducteurId!==c.conducteurId)) annonceEnvoi([Object.assign({},c,patch)],{id,prev});
+  else toast(chauffeur?"Course affectée":"Véhicule affecté — choisissez un conducteur pour envoyer la course");
 }
+const aEnvoyer = () => { const lim=addDays(todayIso(),-7); return S.courses.filter(c=>c.conducteurId && c.statut==="planifiee" && (!c.enlDate || c.enlDate>=lim)); };
+function annonceEnvoi(cs, undo){
+  const c=cs[0], k=condById(c.conducteurId), un=cs.length===1; S.undoSend=undo||null;
+  const d=((k&&k.tel)||"").replace(/\D/g,""); const intl=/^0\d{9}$/.test(d)?"33"+d.slice(1):(/^33\d{9}$/.test(d)?d:"");
+  const msg=k?`Bonjour ${(k.nom||"").split(" ")[0]}, une nouvelle course t'attend dans Dream Chauffeur : ${c.donneur||"course"}, enlèvement ${frDate(c.enlDate,{weekday:"long",day:"numeric",month:"long"})}${c.enlHeure?" à "+c.enlHeure:""}${c.enlVille?" · "+c.enlVille:""}. ${CHAUFFEUR_URL}`:"";
+  const bouton=`style="margin-left:10px;background:transparent;border:1px solid var(--side-muted);color:var(--side-fg);border-radius:8px;padding:5px 10px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block"`;
+  toastAct(`<span>${un?`Course envoyée à ${esc(k?k.nom:"le conducteur")}`:`${cs.length} courses envoyées aux conducteurs`}</span>${undo?`<button type="button" data-act="undosend" ${bouton}>Annuler</button>`:""}${un&&intl?`<a href="https://wa.me/${intl}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener" ${bouton}>Prévenir par WhatsApp</a>`:""}`, 12000);
+}
+function avecEnvoi(e,o){ // bouton « Enregistrer et envoyer » de la fiche
+  if(!(e.submitter && e.submitter.dataset.send==="1")) return true;
+  if(!o.conducteurId){ toast("Choisissez d'abord le conducteur à qui envoyer la course."); return false; }
+  if(o.statut==="a_planifier"||o.statut==="planifiee"){ o.statut="envoyee"; o.envoyeLe=new Date().toISOString(); o.modifieApresEnvoi=false; }
+  return true; }
 async function sendPlanning(){
-  const list=S.courses.filter(c=>c.enlDate===S.date && c.conducteurId && (c.statut==="planifiee" || c.modifieApresEnvoi));
-  if(!list.length){ toast("Rien de nouveau à envoyer pour ce jour."); return; }
-  const {error}=await sb.from("courses").update({statut:"envoyee",envoye_le:new Date().toISOString(),modifie_apres_envoi:false}).in("id",list.map(c=>c.id)).in("statut",["planifiee","envoyee"]);
-  if(error){ toast(errMsg(error)); return; } scheduleReload(); toast(list.length+" course(s) envoyée(s) aux conducteurs");
+  const list=aEnvoyer(); // toutes les courses affectées et pas encore envoyées, quel que soit le jour affiché
+  if(!list.length){ toast("Toutes les courses affectées sont déjà envoyées."); return; }
+  const {error}=await sb.from("courses").update({statut:"envoyee",envoye_le:new Date().toISOString(),modifie_apres_envoi:false}).in("id",list.map(c=>c.id)).eq("statut","planifiee");
+  if(error){ toast(errMsg(error)); return; } scheduleReload(); annonceEnvoi(list);
 }
 
 /* ---------- COURSES ---------- */
@@ -403,6 +422,7 @@ function vCourses(){
 }
 function statChip(c){ const st=c.statut||"a_planifier"; let x=`<span class="chip st-${esc(st)}">${esc(STATUTS[st]?.l||st)}</span>`;
   if(c.reserve) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Réserve</span></div>`;
+  if(st==="planifiee" && c.conducteurId) x+=`<div style="margin-top:6px"><button type="button" class="btn btn-accent btn-sm" data-act="sendone" data-id="${esc(c.id)}">Envoyer</button></div>`;
   if(incNew(c).length) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Problème signalé</span></div>`;
   if(c.modifieApresEnvoi && st==="envoyee") x+=`<div class="muted" style="font-size:11px;margin-top:3px">Modifiée après envoi</div>`;
   return x; }
@@ -455,7 +475,7 @@ function courseForm(c,opts={}){
   <div class="row-btns" id="formBtns">
     ${opts.canDelete?`<button type="button" class="btn btn-danger" data-act="askdel" style="margin-right:auto">Supprimer</button>`:""}
     <button type="button" class="btn btn-ghost" data-act="${opts.draft?"impback":"close"}">${opts.draft?"Retour":"Annuler"}</button>
-    <button type="submit" class="btn btn-accent">${opts.draft?"Valider ces informations":"Enregistrer"}</button></div>
+    ${!opts.draft && (!c.statut||c.statut==="a_planifier"||c.statut==="planifiee") ? `<button type="submit" class="btn btn-ghost" data-send="0">Enregistrer sans envoyer</button><button type="submit" class="btn btn-accent" data-send="1">Enregistrer et envoyer</button>` : `<button type="submit" class="btn btn-accent">${opts.draft?"Valider ces informations":"Enregistrer"}</button>`}</div>
   </form>`;
 }
 function readForm(base){
@@ -478,16 +498,16 @@ function openCourse(id){
   const c=S.courses.find(x=>x.id===id); if(!c) return; openId=id;
   openModal(courseForm(c,{title:esc(c.donneur||"Course")+(c.ref?` <span class="muted" style="font-size:14px;font-family:var(--text)">Réf. ${esc(c.ref)}</span>`:""),canDelete:true}));
   $("#cForm").addEventListener("submit",async e=>{ e.preventDefault(); const o=readForm(c);
-    if(c.statut==="envoyee" && (o.conducteurId!==c.conducteurId || o.enlHeure!==c.enlHeure)) o.modifieApresEnvoi=true;
-    if(await saveCourse(c.id,o)){ closeModal(); toast("Course enregistrée"); } });
+    if(!avecEnvoi(e,o)) return; const envoi=o.statut==="envoyee" && c.statut!=="envoyee";
+    if(await saveCourse(c.id,o)){ closeModal(); if(envoi) annonceEnvoi([Object.assign({},c,o)]); else toast("Course enregistrée"); } });
 }
 function newCourse(prefill){
   const c=Object.assign({enlDate:S.date,statut:"a_planifier"},prefill||{});
   openModal(courseForm(c,{title:"Nouvelle course"}));
   $("#cForm").addEventListener("submit",async e=>{ e.preventDefault(); const o=readForm(c);
     if(!o.donneur||!o.enlDate){ toast("Indiquez au moins le donneur d'ordre et la date d'enlèvement."); return; }
-    o.source="manuel";
-    if(await saveCourse(null,o)){ closeModal(); toast("Course créée"); } });
+    o.source="manuel"; if(!avecEnvoi(e,o)) return;
+    if(await saveCourse(null,o)){ closeModal(); if(o.statut==="envoyee") annonceEnvoi([Object.assign({},c,o)]); else toast(o.conducteurId?"Course créée, pas encore envoyée au conducteur":"Course créée"); } });
 }
 async function openDoc(path){
   const {data,error}=await sb.storage.from("documents").createSignedUrl(path,600);
@@ -912,6 +932,9 @@ document.addEventListener("click",async e=>{
   else if(d.act==="import"){ startImport(); }
   else if(d.act==="close"){ closeModal(); }
   else if(d.act==="send"){ sendPlanning(); }
+  else if(d.act==="sendone"){ const c=S.courses.find(x=>x.id===d.id); if(!c||!c.conducteurId) return; const prev={statut:c.statut,envoyeLe:c.envoyeLe||null};
+    if(await patchCourse(c.id,{statut:"envoyee",envoyeLe:new Date().toISOString(),modifieApresEnvoi:false})) annonceEnvoi([c],{id:c.id,prev}); }
+  else if(d.act==="undosend"){ const u=S.undoSend; if(!u) return; S.undoSend=null; if(await patchCourse(u.id,u.prev)) toast("Envoi annulé"); }
   else if(d.act==="impsave"){ saveImport(); }
   else if(d.act==="impback"){ showImport(); }
   else if(d.act==="askdel"){ $("#formBtns").insertAdjacentHTML("afterbegin",`<span style="margin-right:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="color:var(--danger)">Supprimer définitivement ?</b><button type="button" class="btn btn-danger btn-sm" data-act="dodel">Oui, supprimer</button></span>`); el.remove(); }
