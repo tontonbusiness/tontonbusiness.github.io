@@ -95,8 +95,28 @@ async function loadData(){
       const i=c&&incNew(c).slice(-1)[0]; if(i) toast(`Problème signalé par ${condById(c.conducteurId)?.nom||"un conducteur"} : ${INC[i.type]||"Autre"}`); }
     S.incN=n; }
   if(isStaff()) for(const f of X.onData){ try{ await f(); }catch(e){ console.error(e); } }
+  if(S.mem.role==="conducteur" && !bad) detecterNouvelles(); // jamais sur un chargement en erreur : il ferait croire que tout est nouveau
   S.loaded=true; render();
 }
+/* ---------- conducteur : notification d'une nouvelle course reçue ---------- */
+const vuesMem = {};
+function lireVues(k){ const raw=store.get(k); if(raw!==null){ try{ return new Set(JSON.parse(raw)); }catch(e){ return new Set(); } } return vuesMem[k] ? new Set(vuesMem[k]) : null; }
+function ecrireVues(k,ids){ vuesMem[k]=ids; store.set(k,JSON.stringify(ids)); }
+function signalerApp(n){ try{ document.title=(n?"("+n+") ":"")+APPNAME; if(n){ navigator.setAppBadge && navigator.setAppBadge(n).catch(()=>{}); } else { navigator.clearAppBadge && navigator.clearAppBadge().catch(()=>{}); } }catch(e){} }
+function detecterNouvelles(){
+  const k="dc_vues_"+S.mem.conducteur_id;
+  const miennes=S.courses.filter(c=>c.conducteurId===S.mem.conducteur_id && DRV_ST.includes(c.statut));
+  const vues=lireVues(k);
+  if(!vues){ ecrireVues(k,miennes.map(c=>c.id)); S.nouvelles=[]; return; } // première ouverture : rien à signaler
+  const hier=addDays(todayIso(),-1);
+  const nv=miennes.filter(c=>!vues.has(c.id) && c.statut==="envoyee" && (c.livDate||c.enlDate||"")>=hier).map(c=>c.id);
+  const avant=new Set(S.nouvelles||[]); const fraiches=nv.filter(id=>!avant.has(id));
+  S.nouvelles=nv; miennes.forEach(c=>{ if(!nv.includes(c.id)) vues.add(c.id); }); ecrireVues(k,[...vues].slice(-800)); signalerApp(nv.length);
+  if(fraiches.length){ toast(fraiches.length>1?`${fraiches.length} nouvelles courses reçues`:"Nouvelle course reçue");
+    try{ navigator.vibrate && navigator.vibrate([200,100,200]); }catch(e){}
+    try{ const AC=window.AudioContext||window.webkitAudioContext; const a=new AC(), o=a.createOscillator(), g=a.createGain(); o.frequency.value=880; g.gain.value=0.08; o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime+0.25); setTimeout(()=>a.close(),600); }catch(e){} }
+}
+function marquerVues(){ if(!S.mem || S.mem.role!=="conducteur") return; const k="dc_vues_"+S.mem.conducteur_id; const v=lireVues(k)||new Set(); (S.nouvelles||[]).forEach(id=>v.add(id)); ecrireVues(k,[...v]); S.nouvelles=[]; signalerApp(0); }
 let channel=null;
 function subscribe(){
   if(channel) sb.removeChannel(channel);
@@ -562,12 +582,19 @@ function vDriver(){
   const nDone=vis.filter(c=>c.statut==="terminee").length, allDone=vis.length>0 && nDone===vis.length;
   const jobs=vis.map((c,i)=> c.statut==="terminee" && !S.openJobs.has(c.id) ? jobLine(c,i+1) : jobHtml(c,i+1,c.id===curId)).join("");
   const veh = camName(me.camionId) ? camName(me.camionId)+(isTracteur(me.camionId)&&remName(camById(me.camionId)?.remorqueId)?" + "+remName(camById(me.camionId).remorqueId):"") : "";
+  const nvL = staff ? [] : (S.nouvelles||[]).map(id=>S.courses.find(c=>c.id===id)).filter(Boolean).sort((a,b)=>(a.enlDate||"").localeCompare(b.enlDate||"")||(toMin(a.enlHeure)||0)-(toMin(b.enlHeure)||0));
+  const nvVisible = nvL.find(c=>inDay(c,todayIso())||inDay(c,addDays(todayIso(),1)));
+  const nvHtml = nvL.length ? `<div role="status" style="background:var(--accent-soft);border:2px solid var(--accent);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px">
+      <b style="font-size:17px">${nvL.length>1?nvL.length+" nouvelles courses reçues":"Nouvelle course reçue"}</b>
+      ${nvL.map(c=>`<div style="font-size:14px"><b>${esc(c.donneur||"Course")}</b> — ${esc(frDate(c.enlDate,{weekday:"long",day:"numeric",month:"long"}))}${c.enlHeure?" à "+esc(c.enlHeure):""}<div class="muted">${esc(c.enlVille||"?")} → ${esc(c.livVille||"?")}</div></div>`).join("")}
+      <div class="two">${nvVisible?`<button type="button" class="btn btn-navy big" data-drv="voirnv" data-id="${esc(nvVisible.id)}">Voir la course</button>`:`<span></span>`}<button type="button" class="btn btn-ghost big" data-drv="vunv" data-id="">J'ai vu</button></div></div>` : "";
   const prog = vis.length ? `<div class="prog" role="img" aria-label="${nDone} course${nDone>1?"s":""} sur ${vis.length} terminée${nDone>1?"s":""}"><div class="prog-bar"><span style="width:${Math.round(nDone/vis.length*100)}%"></span></div><span>${nDone} sur ${vis.length} terminée${nDone>1?"s":""}</span></div>` : "";
   return `<div class="drv"><div class="drv-head"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h1>Bonjour ${esc((me.nom||"").split(" ")[0])}</h1>${logo}</div>
     <span style="color:var(--side-muted)">${esc(frDate(day,{weekday:"long",day:"numeric",month:"long"}))}${veh?" · "+esc(veh):""}</span>
     <div class="seg" role="group" aria-label="Jour" style="align-self:flex-start"><button type="button" class="${S.drvDay==="today"?"on":""}" data-dday="today">Aujourd'hui</button><button type="button" class="${S.drvDay==="tomorrow"?"on":""}" data-dday="tomorrow">Demain</button></div>
     ${prog}
     ${sel}</div>
+    ${nvHtml}
     ${tip}
     ${allDone && S.drvDay==="today" ? `<div class="job">${dayRecapHtml(me.id)}</div>` : ""}
     ${vis.length?jobs:`<div class="job"><b>Aucune course envoyée${S.drvDay==="today"?" pour aujourd'hui":" pour demain"}.</b><span class="muted">${staff&&hidden?`${hidden} course(s) prévue(s) mais pas encore envoyée(s).`:"Le planning apparaîtra ici dès que l'exploitation l'aura envoyé."}</span></div>`}
@@ -676,7 +703,7 @@ function jobHtml(c,n,cur){
   const jour = d => autreJour && d ? " · "+esc(frDate(d,{weekday:"short",day:"numeric",month:"short"})) : "";
   const incs = incOf(c).map(i=>`<div class="alert"><b>Signalé${i.heure?" à "+esc(i.heure):""} · ${esc(INC[i.type]||"Autre")}</b>${i.commentaire?" — "+esc(i.commentaire):""}</div>`).join("");
   return `<article class="job ${cur?"cur":""}" id="job-${id}">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:16px">${n} · ${esc(c.donneur||"")}</b><span style="display:flex;align-items:center;gap:8px">${st==="terminee"?`<button type="button" class="linkbtn" data-drv="toggle" data-id="${id}" aria-expanded="true">Replier</button>`:""}<span class="chip st-${esc(st)}">${esc(STATUTS[st]?.l||"")}</span></span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:16px">${n} · ${esc(c.donneur||"")}${(S.nouvelles||[]).includes(c.id)?` <span class="chip" style="border-color:var(--accent);background:var(--accent);color:var(--on-accent);vertical-align:middle">Nouveau</span>`:""}</b><span style="display:flex;align-items:center;gap:8px">${st==="terminee"?`<button type="button" class="linkbtn" data-drv="toggle" data-id="${id}" aria-expanded="true">Replier</button>`:""}<span class="chip st-${esc(st)}">${esc(STATUTS[st]?.l||"")}</span></span></div>
     ${step(!!c.chargeEnl,enlCur,"enl","Enlèvement"+jour(c.enlDate),c.enlHeure,`<div>${esc(c.enlNom||"")}</div><div>${esc(c.enlAdresse||"")} ${esc(c.enlCp||"")} ${esc(c.enlVille||"")}</div><a href="${maps(c.enlAdresse,c.enlCp,c.enlVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,sub("Arrivé",c.arriveeEnl)+sub("Chargé",c.chargeEnl),enlBtn)}
     ${step(!!c.livre,livCur,"liv","Livraison"+jour(c.livDate),c.livHeure,`<div>${esc(c.livNom||"")}</div><div>${esc(c.livAdresse||"")} ${esc(c.livCp||"")} ${esc(c.livVille||"")}</div><a href="${maps(c.livAdresse,c.livCp,c.livVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,sub("Arrivé",c.arriveeLiv)+sub("Livré",c.livre)+(c.signataire?`<span class="sub ok">✓ Signé par ${esc(c.signataire)}</span>`:""),livBtn)}
     ${vehLabel(c)?`<div style="font-size:13px"><b>Véhicule :</b> ${esc(vehLabel(c))}</div>`:""}
@@ -691,6 +718,8 @@ function jobHtml(c,n,cur){
 }
 async function drvAction(act,id,el){
   if(act==="pasencore"){ toast("Valide d'abord l'enlèvement : arrivé, puis chargé."); return; }
+  if(act==="vunv"){ marquerVues(); render(); return; }
+  if(act==="voirnv"){ const c=S.courses.find(x=>x.id===id); marquerVues(); if(c) S.drvDay = inDay(c,todayIso()) ? "today" : "tomorrow"; render(); const j=document.getElementById("job-"+id); j&&j.scrollIntoView({block:"start"}); return; }
   if(act==="toggle"){ S.openJobs.has(id)?S.openJobs.delete(id):S.openJobs.add(id); render(); return; }
   if(act==="incident"){ openIncident(id); return; }
   if(act==="next"){ closeModal(); S.drvDay="today"; render(); const j=document.getElementById("job-"+id); j&&j.scrollIntoView({block:"start"}); return; }
