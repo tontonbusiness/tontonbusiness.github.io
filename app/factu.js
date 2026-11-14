@@ -101,7 +101,57 @@ async function mkFacture(el){
   el.disabled=true; if(!(await factureTransports(cs, el.dataset.donneur))) el.disabled=false;
 }
 /* accès depuis la fiche d'un transport */
-T.courseExtra = c => kmBloc(c) + carteBloc(c) + coutBloc(c) + factBloc(c);
+T.courseExtra = c => suiviBloc(c) + stBloc(c) + kmBloc(c) + carteBloc(c) + coutBloc(c) + factBloc(c);
+const dh = t => t ? new Date(t).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}) : "";
+/* ---------- suivi de l'envoi : envoyée, vue par le chauffeur ---------- */
+const suiviBloc = c => { if(!("vuLe" in c) || !c.conducteurId || !["envoyee","en_cours","terminee"].includes(c.statut)) return "";
+  const k=S.conducteurs.find(x=>x.id===c.conducteurId); const nom=k?k.nom:"le chauffeur";
+  return `<div class="banner" style="justify-content:flex-start"><span><b>Envoi :</b> ${c.envoyeLe?"envoyée à "+esc(nom)+" le "+dh(c.envoyeLe):"envoyée à "+esc(nom)} · ${c.vuLe?`<b style="color:var(--ok)">vue par ${esc(nom)} le ${dh(c.vuLe)}</b>`:`<b style="color:var(--accent-ink)">pas encore vue</b>`}</span></div>`; };
+/* ---------- SOUS-TRAITANCE d'un transport : le confier, envoyer l'ordre de transport ---------- */
+const stActif = () => S.courses.some(c=>"sousTraitantId" in c);
+T.planRows = () => (F.ready && stActif()) ? sousTraitants().sort((a,b)=>a.nom.localeCompare(b.nom)).map(c=>({id:"st:"+c.id,stId:c.id,nom:c.nom,st:true})) : [];
+async function confier(c, stId){
+  const {error}=await sb.from("courses").update({sous_traitant_id:stId,conducteur_id:null,camion_id:null,remorque_id:null,statut:"planifiee",ordre_envoye_le:null,vu_le:null}).eq("id",c.id);
+  if(error){ toast(fErr(error)); return false; } await T.loadData(); return true; }
+T.assignSt = async (c, stId) => { if(await confier(c,stId)) openOrdre(c.id); };
+const prixSt = c => { const l=coutsDe(c).find(x=>x.st===c.sousTraitantId && x.libelle===CT_TYPES[0]); return l?l.montant:""; };
+const stBloc = c => { if(!F.ready || !stActif() || c.statut==="annulee") return "";
+  const st=clientById(c.sousTraitantId);
+  if(st) return `<div class="banner"><span><b>Sous-traitance :</b> confié à <b>${esc(st.nom)}</b>${prixSt(c)!==""?" · "+money(prixSt(c))+" HT":""} · ${c.ordreEnvoyeLe?"ordre de transport envoyé le "+dh(c.ordreEnvoyeLe):`<b style="color:var(--accent-ink)">ordre de transport pas encore envoyé</b>`}</span><span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-accent btn-sm" data-f="ordre" data-id="${esc(c.id)}">Ordre de transport</button><button type="button" class="btn btn-ghost btn-sm" data-f="streprendre" data-id="${esc(c.id)}">Reprendre la course</button></span></div>`;
+  if(["en_cours","terminee"].includes(c.statut)) return "";
+  const subs=sousTraitants();
+  return `<div class="bar" style="font-size:13px;gap:8px"><b>Sous-traiter :</b>${subs.length?`<select class="fin" id="stPick" style="width:auto;min-width:200px" aria-label="Sous-traitant"><option value="">— Choisir un sous-traitant —</option>${subs.map(x=>`<option value="${esc(x.id)}">${esc(x.nom)}</option>`).join("")}</select><button type="button" class="btn btn-ghost btn-sm" data-f="stconfier" data-id="${esc(c.id)}">Confier à ce sous-traitant</button>`:`<span class="muted">Aucun sous-traitant enregistré.</span>`}<button type="button" class="linkbtn" data-f="cnew" data-st="1">Nouveau sous-traitant</button></div>`; };
+function ordreMsg(c, st, prix){ const so=F.param.societe; const j=d=>d?frDate(d,{weekday:"long",day:"numeric",month:"long",year:"numeric"}):"date à confirmer";
+  const march=[c.palettes&&c.palettes+" palettes",c.colis&&c.colis+" colis",c.poids&&Number(c.poids).toLocaleString("fr-FR").replace(/[\u202f\u00a0]/g," ")+" kg",c.metres&&c.metres+" m de plancher",c.marchandise].filter(Boolean).join(", ");
+  const p = prix!==""&&prix!=null ? (Number(prix)||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/[\u202f\u00a0]/g," ")+" € HT" : "à confirmer";
+  return { objet:`Ordre de transport ${c.ref?"réf. "+c.ref+" ":""}— ${c.enlVille||"?"} → ${c.livVille||"?"} — ${d2(c.enlDate)}`,
+    corps:`Bonjour,\n\nNous vous confirmons l'ordre de transport suivant${c.ref?" (référence "+c.ref+")":""} :\n\nENLÈVEMENT — ${j(c.enlDate)}${c.enlHeure?" à "+c.enlHeure+(c.enlHeureFin?" (jusqu'à "+c.enlHeureFin+")":""):""}\n${[c.enlNom,c.enlAdresse,[c.enlCp,c.enlVille].filter(Boolean).join(" ")].filter(Boolean).join("\n")}\n\nLIVRAISON — ${j(c.livDate||c.enlDate)}${c.livHeure?" à "+c.livHeure+(c.livHeureFin?" (jusqu'à "+c.livHeureFin+")":""):""}\n${[c.livNom,c.livAdresse,[c.livCp,c.livVille].filter(Boolean).join(" ")].filter(Boolean).join("\n")}\n\nMarchandise : ${march||"à préciser"}${c.instructions?"\nConsignes : "+c.instructions:""}${c.contact?"\nContact sur place : "+c.contact:""}\n\nPrix convenu : ${p}\n\nMerci de nous confirmer la prise en charge par retour, et de joindre le BL / CMR émargé à votre facture.\n\nCordialement,\n${so.nom||S.entreprise?.nom||""}${so.tel?"\n"+so.tel:""}` }; }
+function ordrePaper(c, st, prix){ const so=F.param.societe; const li=(a,b)=>b?`<div>${a?`<small>${a} : </small>`:""}${esc(b)}</div>`:"";
+  const lieu=(t,nom,adr,cp,ville,date,h,hf)=>`<div class="box"><small>${t}</small><div><b>${esc(nom||ville||"")}</b></div>${li("",adr)}${li("",[cp,ville].filter(Boolean).join(" "))}<div><b>${date?esc(frDate(date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})):"Date à confirmer"}${h?" à "+esc(h)+(hf?" – "+esc(hf):""):""}</b></div></div>`;
+  return `<div class="paper"><div class="two-col"><div><b style="font-size:17px">${esc(so.nom||S.entreprise?.nom||"")}</b>${li("",so.adresse)}${li("",[so.cp,so.ville].filter(Boolean).join(" "))}${li("SIRET",so.siret)}${li("Tél.",so.tel)}${li("",so.email)}</div>
+      <div style="text-align:right"><h3>ORDRE DE TRANSPORT</h3>${c.ref?`<div><b>Réf. ${esc(c.ref)}</b></div>`:""}<div><small>Émis le : </small>${d2(todayIso())}</div></div></div>
+    <div class="two-col"><div></div><div class="box"><small>Transporteur sous-traitant</small><div><b>${esc(st.nom)}</b></div>${li("",st.adresse)}${li("",[st.cp,st.ville].filter(Boolean).join(" "))}${li("SIREN",st.siren)}</div></div>
+    <div class="two-col">${lieu("Enlèvement",c.enlNom,c.enlAdresse,c.enlCp,c.enlVille,c.enlDate,c.enlHeure,c.enlHeureFin)}${lieu("Livraison",c.livNom,c.livAdresse,c.livCp,c.livVille,c.livDate||c.enlDate,c.livHeure,c.livHeureFin)}</div>
+    <table><thead><tr><th>Marchandise</th><th class="r">Palettes</th><th class="r">Colis</th><th class="r">Poids</th><th class="r">Mètres de plancher</th></tr></thead><tbody><tr><td>${esc(c.marchandise||"—")}</td><td class="r">${esc(c.palettes??"—")}</td><td class="r">${esc(c.colis??"—")}</td><td class="r">${c.poids?Number(c.poids).toLocaleString("fr-FR")+" kg":"—"}</td><td class="r">${esc(c.metres??"—")}</td></tr></tbody></table>
+    ${c.instructions?`<div class="box"><small>Consignes</small><div>${esc(c.instructions)}</div></div>`:""}${c.contact?`<div><small>Contact sur place : </small>${esc(c.contact)}</div>`:""}
+    <table class="ptot"><tbody><tr><td>Prix convenu HT</td><td class="r">${prix!==""&&prix!=null?money(prix):"à confirmer"}</td></tr></tbody></table>
+    <div class="legal">Merci de confirmer la prise en charge par retour. Le BL / CMR émargé par le destinataire est à joindre à votre facture. Toute difficulté (retard, attente, réserve) est à signaler immédiatement à notre exploitation.</div></div>`; }
+function openOrdre(id){ const c=S.courses.find(x=>x.id===id); const st=c&&clientById(c.sousTraitantId); if(!st) return; F.ordre={id};
+  const prix=prixSt(c); const m=ordreMsg(c,st,prix); const tel=String(st.tel||"").replace(/\D/g,""); const intl=/^0\d{9}$/.test(tel)?"33"+tel.slice(1):(/^33\d{9}$/.test(tel)?tel:"");
+  openModal(`<div data-lock="keep" style="display:flex;flex-direction:column;gap:12px"><div class="bar"><h2 style="flex:1">Ordre de transport — ${esc(st.nom)}</h2>${c.ordreEnvoyeLe?`<span class="chip st-terminee">Envoyé le ${dh(c.ordreEnvoyeLe)}</span>`:`<span class="chip st-planifiee">Pas encore envoyé</span>`}</div>
+    <div class="fgrid"><label class="fld">Prix convenu avec le sous-traitant (HT)<input class="fin num" type="number" step="0.01" min="0" id="oPrix" value="${esc(prix)}"></label><label class="fld">E-mail du sous-traitant<input class="fin" type="email" id="oMail" value="${esc(st.email||"")}" placeholder="À compléter"></label></div>
+    <span class="muted" style="font-size:12px">Prix de vente de ce transport : ${c.prix?money(c.prix):"non renseigné"}. Le prix convenu est ajouté aux coûts d'achat du transport.</span>
+    <label class="fld">Objet<input class="fin" id="oObj" value="${esc(m.objet)}"></label>
+    <label class="fld">Message (modifiable)<textarea class="fin" id="oTxt" rows="12">${esc(m.corps)}</textarea></label>
+    <span class="muted" style="font-size:12px">L'envoi se fait depuis votre messagerie ou WhatsApp. Cliquez ensuite sur « Enregistrer : ordre envoyé » pour passer la course en « Envoyé ». Le sous-traitant n'a pas l'application : c'est vous qui passerez la course en « Terminé » dans sa fiche.</span>
+    <div class="row-btns"><button type="button" class="btn btn-ghost" data-act="close" style="margin-right:auto">Fermer</button><button type="button" class="btn btn-ghost" data-f="oprint">Imprimer / PDF</button><button type="button" class="btn btn-ghost" data-f="ocopy">Copier le message</button>${intl?`<button type="button" class="btn btn-ghost" data-f="owa" data-tel="${intl}">WhatsApp</button>`:""}<button type="button" class="btn btn-navy" data-f="omail">Ouvrir dans ma messagerie</button><button type="button" class="btn btn-accent" data-f="osave">Enregistrer : ordre envoyé</button></div></div>`); }
+async function ordreEnregistrer(envoye){ const c=S.courses.find(x=>x.id===F.ordre.id); if(!c) return false; const v=$("#oPrix").value.trim(); const prix=v===""?null:Number(v.replace(",","."));
+  if(prix!=null && !(prix>=0)){ toast("Le prix convenu n'est pas valide."); return false; }
+  const autres=coutsDe(c).filter(l=>!(l.st===c.sousTraitantId && l.libelle===CT_TYPES[0])); const couts = prix==null ? autres : [{libelle:CT_TYPES[0],montant:r2(prix),st:c.sousTraitantId}].concat(autres);
+  const patch={couts}; if(envoye){ patch.ordre_envoye_le=new Date().toISOString(); if(c.statut==="planifiee"||c.statut==="a_planifier") patch.statut="envoyee"; }
+  const {error}=await sb.from("courses").update(patch).eq("id",c.id); if(error){ toast(fErr(error)); return false; }
+  const mail=$("#oMail").value.trim(); const st=clientById(c.sousTraitantId); if(mail && st && !st.email){ await sb.from("clients").update({email:mail}).eq("id",st.id); st.email=mail; }
+  return true; }
 /* ---------- PRIX ET COÛTS D'ACHAT d'un transport : sous-traitance, péages, frais… et marge ---------- */
 const CT = { id:null, lignes:[] };
 const coutsDe = c => Array.isArray(c.couts) ? c.couts : [];
@@ -566,6 +616,14 @@ document.addEventListener("click", async e=>{
     const r=await newPiece("facture",{client_id:p.client_id,lignes,total_ht:t.ht,total_tva:t.tva,total_ttc:t.ttc,notes:`Selon devis ${p.numero}`}); if(r.error){ toast(fErr(r.error)); return; }
     await load(); location.hash="factures"; render(); openPiece(r.data.id); }
   else if(a==="relance"){ openRelance(d.client); }
+  else if(a==="stconfier"){ const c=S.courses.find(x=>x.id===d.id); const v=$("#stPick").value; if(!c) return; if(!v){ toast("Choisissez un sous-traitant dans la liste."); return; } el.disabled=true; closeModal(); if(await confier(c,v)) openOrdre(c.id); }
+  else if(a==="streprendre"){ if(!el.dataset.ok){ el.dataset.ok="1"; el.textContent="Confirmer : reprendre la course"; return; } const {error}=await sb.from("courses").update({sous_traitant_id:null,ordre_envoye_le:null,statut:"a_planifier"}).eq("id",d.id); if(error){ toast(fErr(error)); return; } closeModal(); toast("Course reprise : elle est de nouveau à planifier"); T.loadData(); }
+  else if(a==="ordre"){ closeModal(); openOrdre(d.id); }
+  else if(a==="oprint"){ const c=S.courses.find(x=>x.id===F.ordre.id); const st=clientById(c.sousTraitantId); let z=$("#printzone"); if(!z){ z=document.createElement("div"); z.id="printzone"; document.body.appendChild(z); } z.innerHTML=ordrePaper(c,st,$("#oPrix").value.trim()); window.print(); }
+  else if(a==="ocopy"){ const t=$("#oObj").value+"\n\n"+$("#oTxt").value; try{ await navigator.clipboard.writeText(t); toast("Message copié"); }catch(err){ $("#oTxt").select(); toast("Copie impossible ici : le message est sélectionné, faites Ctrl+C."); } }
+  else if(a==="omail"){ const to=$("#oMail").value.trim(); if(!to){ toast("Indiquez l'e-mail du sous-traitant."); $("#oMail").focus(); return; } location.href="mailto:"+encodeURIComponent(to)+"?subject="+encodeURIComponent($("#oObj").value)+"&body="+encodeURIComponent($("#oTxt").value); }
+  else if(a==="owa"){ window.open("https://wa.me/"+d.tel+"?text="+encodeURIComponent($("#oObj").value+"\n\n"+$("#oTxt").value),"_blank","noopener"); }
+  else if(a==="osave"){ el.disabled=true; if(!(await ordreEnregistrer(true))){ el.disabled=false; return; } closeModal(); toast("Ordre de transport enregistré comme envoyé"); T.loadData(); }
   else if(a==="kmsave"){ const c=S.courses.find(x=>x.id===d.id); if(!c) return; const v=$("#kmIn").value.trim(); const km=v===""?null:Number(v.replace(",",".")); if(km!=null && !(km>=0 && km<10000)){ toast("Indiquez une distance en kilomètres."); return; }
     const {error}=await sb.from("courses").update({km,km_cle:km==null?null:"manuel:"+kmCle(c)}).eq("id",c.id); if(error){ toast(fErr(error)); return; } c.km=km; c.kmCle=km==null?null:"manuel:"+kmCle(c); KM.ko.delete(c.id+kmCle(c)); toast(km==null?"Distance effacée : elle sera recalculée automatiquement":"Distance enregistrée"); }
   else if(a==="kmcalc"){ const c=S.courses.find(x=>x.id===d.id); if(!c) return; if(!kmPret(c)){ toast("Renseignez d'abord les villes d'enlèvement et de livraison, puis enregistrez."); return; } el.disabled=true; el.textContent="Calcul…";
@@ -627,6 +685,7 @@ document.addEventListener("change", async e=>{
   if(de.ct==="type" || de.ct==="st"){ const l=CT.lignes[Number(de.i)]; if(!l) return; if(de.ct==="type") l.type=e.target.value; else if(e.target.value==="__new"){ l.st=""; l.stnom=""; } else l.st=e.target.value;
     $("#ctBox").innerHTML=coutInner(); if(l.stnom!==undefined) document.querySelector(`[data-ct="stnom"][data-i="${de.i}"]`)?.focus(); return; }
   if(e.target.id==="stSel"){ B.st=e.target.value; render(); return; }
+  if(e.target.id==="oPrix" && F.ordre){ const c=S.courses.find(x=>x.id===F.ordre.id); const st=c&&clientById(c.sousTraitantId); if(st){ const m=ordreMsg(c,st,e.target.value.trim()); $("#oTxt").value=m.corps; } return; }
   if(de.ech){ const liste=S[de.ech]; const o=liste&&liste.find(x=>x.id===de.id); if(!o) return;
     const ech=Object.assign({},o.echeances||{}); if(e.target.value) ech[de.k]=e.target.value; else delete ech[de.k];
     const {error}=await sb.from(de.ech).update({echeances:ech}).eq("id",o.id);
