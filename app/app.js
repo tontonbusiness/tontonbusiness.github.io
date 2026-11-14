@@ -95,6 +95,7 @@ async function loadData(){
     if(S.incN!=null && n>S.incN){ const c=S.courses.filter(x=>incNew(x).length).sort((x,y)=>String(incNew(y).slice(-1)[0].le).localeCompare(String(incNew(x).slice(-1)[0].le)))[0];
       const i=c&&incNew(c).slice(-1)[0]; if(i) toast(`Problème signalé par ${condById(c.conducteurId)?.nom||"un conducteur"} : ${INC[i.type]||"Autre"}`); }
     S.incN=n; }
+  if(isStaff()){ const pa=await sb.rpc("push_actifs",{p_entreprise:eid}); S.pushActifs = pa.error ? null : new Set((pa.data||[]).map(x=>typeof x==="string"?x:Object.values(x)[0])); }
   if(isStaff()) for(const f of X.onData){ try{ await f(); }catch(e){ console.error(e); } }
   if(S.mem.role==="conducteur" && !bad) detecterNouvelles(); // jamais sur un chargement en erreur : il ferait croire que tout est nouveau
   S.loaded=true; render();
@@ -162,7 +163,7 @@ const aFacturer = c => c.statut==="terminee" && !c.facturee;
 
 /* ---------- navigation ---------- */
 const VIEWS = ["planning","courses","indicateurs","conducteur","parametres"];
-function readHash(){ const h=(location.hash||"").replace("#",""); S.view = (VIEWS.includes(h)||X.views[h])?h:"planning"; if(MODE==="chauffeur" || (S.mem && !isStaff())) S.view="conducteur"; }
+function readHash(){ const h=(location.hash||"").replace("#",""); const mc=/^course=([\w-]{1,64})$/.exec(h); if(mc && MODE==="chauffeur"){ S.ouvrir=mc[1]; history.replaceState(null,"",location.pathname+location.search); } S.view = (VIEWS.includes(h)||X.views[h])?h:"planning"; if(MODE==="chauffeur" || (S.mem && !isStaff())) S.view="conducteur"; }
 window.addEventListener("hashchange",()=>{ readHash(); render(); window.scrollTo(0,0); });
 
 function renderNav(){
@@ -200,6 +201,48 @@ const X = { views:{}, nav:null, onData:[], after, S, sb, $, esc, toast, errMsg, 
 /* ---------- CONNEXION ---------- */
 function authShell(inner){ const img = MODE==="chauffeur" ? `<img src="icon-192.png" alt="" style="border-radius:12px">` : `<img src="../logo-blanc.png" alt="Tonton Business">`;
   return `<div class="auth"><div class="auth-card"><div class="logo">${img}<b>${APPNAME}</b></div>${inner}</div></div>`; }
+/* ---------- NOTIFICATIONS (Dream Chauffeur) ---------- */
+const pushOk = () => MODE==="chauffeur" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const b64uOctets = s => { const t=atob(s.replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from(t,ch=>ch.charCodeAt(0)); };
+let swReg=null;
+function swEnregistrer(){ if(!pushOk() || swReg) return swReg; swReg=navigator.serviceWorker.register("sw.js").catch(()=>null);
+  navigator.serviceWorker.addEventListener("message",ev=>{ const m=ev.data||{}; if(m.type==="ouvrir" && m.course){ S.ouvrir=m.course; } if(m.type==="push"||m.type==="ouvrir") loadData(); });
+  return swReg; }
+async function pushAbonner(){ // l'autorisation est déjà donnée
+  const reg = await swEnregistrer(); if(!reg) throw new Error("sw");
+  await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if(!sub){ const {data,error}=await sb.functions.invoke("envoyer-push",{body:{action:"cle"}});
+    if(error || !data || !data.cle) throw (error||new Error("cle"));
+    sub = await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64uOctets(data.cle)}); }
+  const j=sub.toJSON(); const {error}=await sb.rpc("abonner_push",{p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth});
+  if(error) throw error; store.set("dc_push","1");
+}
+let pushSyncFait=false;
+function pushSync(){ // à chaque ouverture : garde l'abonnement à jour (le téléphone peut le changer)
+  if(pushSyncFait || !pushOk() || !S.mem || S.mem.role!=="conducteur") return; pushSyncFait=true; swEnregistrer();
+  if(Notification.permission==="granted") pushAbonner().then(()=>{ if(!$("#pushCard")) return; render(); },()=>{});
+}
+function pushActiver(){ // doit partir directement du clic (obligatoire sur iPhone)
+  let p; try{ p=Notification.requestPermission(); }catch(e){ p=null; }
+  Promise.resolve(p).then(async r=>{
+    if(r!=="granted"){ render(); toast(r==="denied"?"Notifications refusées. Tu peux les autoriser dans les réglages du téléphone.":"Notifications pas activées."); return; }
+    try{ await pushAbonner(); render(); toast("Notifications activées : tu seras prévenu à chaque nouvelle course."); }
+    catch(e){ console.error(e); render(); toast("Impossible d'activer les notifications pour le moment. Réessaie dans un instant."); }
+  });
+}
+function pushCarte(){
+  if(!pushOk() || !S.mem || S.mem.role!=="conducteur") return "";
+  const perm=Notification.permission;
+  if(perm==="granted" && store.get("dc_push")==="1") return "";
+  const ios=/iPhone|iPad/.test(navigator.userAgent||"");
+  if(perm==="denied") return `<div class="job" id="pushCard" style="gap:6px"><b>Notifications bloquées</b>
+    <span>${ios?"Réglages du téléphone → <b>Notifications</b> → <b>Dream Chauffeur</b> → Autoriser les notifications.":"Réglages du téléphone → Applications → <b>Dream Chauffeur</b> → Notifications → Autoriser."}</span>
+    <span class="muted" style="font-size:13px">Sans elles, tu ne vois les nouvelles courses qu'en ouvrant l'appli.</span></div>`;
+  return `<div class="job" id="pushCard" style="gap:8px;border:2px solid var(--accent)"><b>Sois prévenu des nouvelles courses</b>
+    <span>Ton téléphone sonne dès que l'exploitation t'envoie une course, même quand l'appli est fermée.</span>
+    <button type="button" class="btn btn-accent big" data-drv="pushon" data-id="">Activer les notifications</button></div>`;
+}
 function installTip(){
   if(MODE!=="chauffeur" || standalone() || store.get("dc_tip")==="0") return "";
   const ios=/iPhone|iPad/.test(navigator.userAgent||"");
@@ -351,6 +394,7 @@ function cardHtml(c){
     ${m?`<span class="muted">${esc(m)}</span>`:""}${c.ref?`<span class="muted">Réf. ${esc(c.ref)}</span>`:""}${incNew(c).length?`<span style="color:var(--danger);font-weight:700">Problème : ${esc(INC[incNew(c).slice(-1)[0].type]||"Autre")}</span>`:""}</button>`;
 }
 after.conducteur = ()=>{ // une course affichée sur le téléphone du conducteur, appli au premier plan = course vue
+  if(S.ouvrir && S.loaded){ const c=S.courses.find(x=>x.id===S.ouvrir); S.ouvrir=null; if(c){ drvAction("voirnv",c.id); return; } }
   if(S.mem && S.mem.role==="conducteur" && document.visibilityState==="visible") signalerVues([...document.querySelectorAll('[id^="job-"]')].map(e=>e.id.slice(4))); };
 after.planning = ()=>{
   const d=$("#pDate"); d && d.addEventListener("change",()=>{ if(d.value){ S.date=d.value; render(); } });
@@ -382,8 +426,16 @@ async function assign(id,target){
   else toast(chauffeur?"Course affectée":"Véhicule affecté — choisissez un conducteur pour envoyer la course");
 }
 const aEnvoyer = () => { const lim=addDays(todayIso(),-7); return S.courses.filter(c=>c.conducteurId && c.statut==="planifiee" && (!c.enlDate || c.enlDate>=lim)); };
+function pousserCourses(cs){ // vraie notification sur le téléphone du conducteur (si activée)
+  const ids=cs.filter(c=>c.conducteurId).map(c=>c.id); if(!ids.length) return;
+  sb.functions.invoke("envoyer-push",{body:{courses:ids}}).then(({data})=>{
+    const s=$("#toast span"); if(!s || $("#toast").hidden || !data) return;
+    if(data.envoyes>0) s.textContent += cs.length===1 ? " · notification reçue sur son téléphone" : " · notifications envoyées";
+    else if(cs.length===1) s.textContent += " · notifications pas activées sur son téléphone";
+  }).catch(()=>{});
+}
 function annonceEnvoi(cs, undo){
-  const c=cs[0], k=condById(c.conducteurId), un=cs.length===1; S.undoSend=undo||null;
+  const c=cs[0], k=condById(c.conducteurId), un=cs.length===1; S.undoSend=undo||null; pousserCourses(cs);
   const d=((k&&k.tel)||"").replace(/\D/g,""); const intl=/^0\d{9}$/.test(d)?"33"+d.slice(1):(/^33\d{9}$/.test(d)?d:"");
   const msg=k?`Bonjour ${(k.nom||"").split(" ")[0]}, une nouvelle course t'attend dans Dream Chauffeur : ${c.donneur||"course"}, enlèvement ${frDate(c.enlDate,{weekday:"long",day:"numeric",month:"long"})}${c.enlHeure?" à "+c.enlHeure:""}${c.enlVille?" · "+c.enlVille:""}. ${CHAUFFEUR_URL}`:"";
   const bouton=`style="margin-left:10px;background:transparent;border:1px solid var(--side-muted);color:var(--side-fg);border-radius:8px;padding:5px 10px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none;display:inline-block"`;
@@ -626,6 +678,7 @@ function vDriver(){
     ${prog}
     ${sel}</div>
     ${nvHtml}
+    ${staff?"":pushCarte()}
     ${tip}
     ${allDone && S.drvDay==="today" ? `<div class="job">${dayRecapHtml(me.id)}</div>` : ""}
     ${vis.length?jobs:`<div class="job"><b>Aucune course envoyée${S.drvDay==="today"?" pour aujourd'hui":" pour demain"}.</b><span class="muted">${staff&&hidden?`${hidden} course(s) prévue(s) mais pas encore envoyée(s).`:"Le planning apparaîtra ici dès que l'exploitation l'aura envoyé."}</span></div>`}
@@ -749,6 +802,7 @@ function jobHtml(c,n,cur){
 }
 async function drvAction(act,id,el){
   if(act==="pasencore"){ toast("Valide d'abord l'enlèvement : arrivé, puis chargé."); return; }
+  if(act==="pushon"){ pushActiver(); return; }
   if(act==="vunv"){ marquerVues(); render(); return; }
   if(act==="voirnv"){ const c=S.courses.find(x=>x.id===id); marquerVues(); if(c) S.drvDay = inDay(c,todayIso()) ? "today" : "tomorrow"; render(); const j=document.getElementById("job-"+id); j&&j.scrollIntoView({block:"start"}); return; }
   if(act==="toggle"){ S.openJobs.has(id)?S.openJobs.delete(id):S.openJobs.add(id); render(); return; }
@@ -875,7 +929,8 @@ function vParams(){
   const cnx=id=>{ const m=S.membres.find(x=>x.conducteur_id===id && x.role==="conducteur");
     if(!m) return `<span class="muted">Jamais</span>`;
     const quand = m.derniere_connexion ? new Date(m.derniere_connexion).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"}) : "Relié";
-    return `<span>${esc(quand)}</span>${m.appareil?`<div class="muted" style="font-size:12px">${esc(m.appareil)}</div>`:""}<button type="button" class="linkbtn" style="font-size:12px" data-unlink="${esc(id)}">Déconnecter</button>`; };
+    const notif = S.pushActifs ? (S.pushActifs.has(id) ? `<div style="font-size:12px;color:var(--ok,#1E7B4F);font-weight:600">Notifications activées</div>` : `<div style="font-size:12px;color:var(--warn,#B25E09)">Notifications pas activées</div>`) : "";
+    return `<span>${esc(quand)}</span>${m.appareil?`<div class="muted" style="font-size:12px">${esc(m.appareil)}</div>`:""}${notif}<button type="button" class="linkbtn" style="font-size:12px" data-unlink="${esc(id)}">Déconnecter</button>`; };
   const codeCell=id=>{ const a=codeOf(id);
     return a ? `<span class="num" style="font-weight:700;letter-spacing:.08em;user-select:all">${esc(fmtCode(a.code))}</span><div><button type="button" class="btn btn-accent btn-sm" data-acces="${esc(id)}" style="margin-top:4px">Envoyer par…</button></div>`
              : `<button type="button" class="btn btn-ghost btn-sm" data-regen="${esc(id)}">Générer un code</button>`; };
@@ -1000,7 +1055,7 @@ async function boot(){
     const {data,error}=await sb.from("membres").select("entreprise_id,role,conducteur_id").eq("user_id",session.user.id).limit(1);
     if(!error && data && data[0]){ S.mem=data[0];
       const {data:ent}=await sb.from("entreprises").select("id,nom").eq("id",S.mem.entreprise_id).single(); S.entreprise=ent||{nom:""};
-      readHash(); render(); signaler(); await loadData(); subscribe(); return; }
+      readHash(); render(); signaler(); await loadData(); subscribe(); pushSync(); return; }
   }
   render();
 }
