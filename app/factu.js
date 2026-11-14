@@ -101,7 +101,7 @@ async function mkFacture(el){
   el.disabled=true; if(!(await factureTransports(cs, el.dataset.donneur))) el.disabled=false;
 }
 /* accès depuis la fiche d'un transport */
-T.courseExtra = c => kmBloc(c) + factBloc(c);
+T.courseExtra = c => kmBloc(c) + carteBloc(c) + factBloc(c);
 const factBloc = c => {
   if(!F.ready || c.statut==="annulee") return "";
   const p=F.pieces.find(x=>x.type==="facture" && (x.id===c.factureId || (x.lignes||[]).some(l=>l.course_id===c.id)));
@@ -208,6 +208,35 @@ T.onData.push(()=>{ setTimeout(kmFile,600); });
 const kmBloc = c => { if(!kmActif() || c.statut==="annulee") return "";
   const manuel=String(c.kmCle||"").startsWith("manuel:"); const etat = c.km==null ? (kmPret(c)?"calcul automatique en attente, ou adresse introuvable":"renseignez les villes d'enlèvement et de livraison") : manuel ? "saisie à la main" : "calculée automatiquement, trajet routier enlèvement → livraison";
   return `<div class="bar" style="font-size:13px;gap:8px"><b>Distance :</b><input class="fin num" type="number" step="0.1" min="0" id="kmIn" value="${esc(c.km??"")}" style="width:110px" aria-label="Distance en kilomètres"><span>km</span><span class="muted" style="flex:1;min-width:160px">${etat}</span><button type="button" class="btn btn-ghost btn-sm" data-f="kmsave" data-id="${esc(c.id)}">Enregistrer la distance</button><button type="button" class="btn btn-ghost btn-sm" data-f="kmcalc" data-id="${esc(c.id)}">Recalculer</button></div>`; };
+
+/* ---------- CARTE du trajet sur la fiche d'un transport (fond de carte et itinéraire : IGN) ---------- */
+const CARTE = { lib:null, cache:new Map() };
+const carteBloc = c => (kmActif() && c.statut!=="annulee" && kmPret(c)) ? `<div id="mapBox" data-id="${esc(c.id)}" style="height:280px;border-radius:12px;border:1px solid var(--line);overflow:hidden;background:var(--surface-2);display:grid;place-items:center" role="img" aria-label="Carte du trajet entre l'enlèvement et la livraison"><span class="muted">Chargement de la carte…</span></div>` : "";
+function chargerLeaflet(){ if(window.L) return Promise.resolve(); if(CARTE.lib) return CARTE.lib;
+  CARTE.lib=new Promise((ok,ko)=>{ const l=document.createElement("link"); l.rel="stylesheet"; l.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(l);
+    const sc=document.createElement("script"); sc.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"; sc.onload=()=>ok(); sc.onerror=()=>{ CARTE.lib=null; ko(new Error("leaflet")); }; document.head.appendChild(sc); });
+  return CARTE.lib; }
+async function trajet(c){ const k=c.id+kmCle(c); if(CARTE.cache.has(k)) return CARTE.cache.get(k);
+  const a=await geocoder(c.enlAdresse,c.enlCp,c.enlVille), b=await geocoder(c.livAdresse,c.livCp,c.livVille); if(!a||!b) return null;
+  const u=new URL("https://data.geopf.fr/navigation/itineraire"); u.searchParams.set("resource","bdtopo-osrm"); u.searchParams.set("profile","car"); u.searchParams.set("optimization","fastest");
+  u.searchParams.set("start",a.join(",")); u.searchParams.set("end",b.join(",")); u.searchParams.set("getSteps","false"); u.searchParams.set("geometryFormat","geojson");
+  const r=await fetch(u); if(!r.ok) throw new Error("itineraire "+r.status); const j=await r.json();
+  const ligne=(j.geometry&&j.geometry.coordinates||[]).map(p=>[p[1],p[0]]); const t={ a:[a[1],a[0]], b:[b[1],b[0]], ligne:ligne.length?ligne:[[a[1],a[0]],[b[1],b[0]]] };
+  CARTE.cache.set(k,t); return t; }
+async function dessinerCarte(el){
+  const c=S.courses.find(x=>x.id===el.dataset.id); const ko=()=>{ if(el.isConnected) el.innerHTML=`<span class="muted">Carte indisponible pour ce trajet (adresse introuvable ou service de cartographie injoignable).</span>`; };
+  if(!c){ ko(); return; }
+  try{ const [t]=await Promise.all([trajet(c),chargerLeaflet()]); if(!t){ ko(); return; } if(!el.isConnected) return;
+    el.innerHTML=""; el.style.display="block"; const L=window.L;
+    const map=L.map(el,{scrollWheelZoom:false,attributionControl:true});
+    L.tileLayer("https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}",{maxZoom:18,attribution:"© IGN – Géoplateforme"}).addTo(map);
+    const trace=L.polyline(t.ligne,{color:"#1F3A5F",weight:5,opacity:.85}).addTo(map);
+    const pt=(p,coul,txt)=>L.circleMarker(p,{radius:9,color:"#FFFFFF",weight:3,fillColor:coul,fillOpacity:1}).addTo(map).bindTooltip(txt,{permanent:true,direction:"top",offset:[0,-8]});
+    pt(t.a,"#2E7D4F","Enlèvement"+(c.enlVille?" · "+c.enlVille:"")); pt(t.b,"#F28C28","Livraison"+(c.livVille?" · "+c.livVille:""));
+    map.fitBounds(trace.getBounds(),{padding:[36,36]}); setTimeout(()=>map.invalidateSize(),150);
+  }catch(e){ ko(); }
+}
+new MutationObserver(()=>{ const el=document.getElementById("mapBox"); if(el && !el.dataset.vu){ el.dataset.vu="1"; dessinerCarte(el); } }).observe(document.getElementById("modal"),{childList:true,subtree:true});
 
 /* ---------- ACTIVITÉ PAR CHAUFFEUR : jour, semaine, mois ---------- */
 const A = { cond:"", mode:"semaine", ref:todayIso() };
