@@ -101,7 +101,8 @@ async function mkFacture(el){
   el.disabled=true; if(!(await factureTransports(cs, el.dataset.donneur))) el.disabled=false;
 }
 /* accès depuis la fiche d'un transport */
-T.courseExtra = c => {
+T.courseExtra = c => kmBloc(c) + factBloc(c);
+const factBloc = c => {
   if(!F.ready || c.statut==="annulee") return "";
   const p=F.pieces.find(x=>x.type==="facture" && (x.id===c.factureId || (x.lignes||[]).some(l=>l.course_id===c.id)));
   if(p) return `<div class="banner"><span><b>Facturation :</b> ${p.statut==="brouillon"?"ce transport est dans un brouillon de facture.":"transport facturé — facture "+esc(p.numero||"")+"."}</span><button type="button" class="btn btn-ghost btn-sm" data-f="openfact" data-id="${esc(p.id)}">Ouvrir la facture</button></div>`;
@@ -168,6 +169,46 @@ function echView(g){
 T.views.echvehicules = () => echView("v");
 T.views.echchauffeurs = () => echView("c");
 
+/* ---------- DISTANCES : calcul automatique par la route (services publics de l'IGN : adresse, puis itinéraire) ---------- */
+const KM = { busy:false, ko:new Set(), off:false };
+const kmCle = c => [c.enlAdresse,c.enlCp,c.enlVille,">",c.livAdresse,c.livCp,c.livVille].map(norm).join("|");
+const kmPret = c => !!((c.enlVille||c.enlCp) && (c.livVille||c.livCp));
+const kmActif = () => S.courses.some(c=>"km" in c);
+const kmTxt = v => v==null ? "—" : Number(v).toLocaleString("fr-FR",{maximumFractionDigits:1})+" km";
+async function geocoder(adr,cp,ville){
+  const essai = async q => { q=String(q||"").replace(/\s+/g," ").trim().slice(0,190); if(q.length<3) return null;
+    const u=new URL("https://data.geopf.fr/geocodage/search"); u.searchParams.set("q",q); u.searchParams.set("limit","1"); if(/^\d{5}$/.test(String(cp||"").trim())) u.searchParams.set("postcode",String(cp).trim());
+    const r=await fetch(u); if(!r.ok) throw new Error("geocodage "+r.status); const f=((await r.json()).features||[])[0];
+    return f && f.properties && f.properties.score>=0.4 ? f.geometry.coordinates : null; };
+  let pt = adr ? await essai([adr,ville].filter(Boolean).join(" ")) : null;
+  if(!pt) pt = await essai(ville && String(ville).trim().length>=3 ? ville : [cp,ville].filter(Boolean).join(" ")); // à défaut : le centre de la commune
+  return pt;
+}
+async function calcKm(c){
+  const a=await geocoder(c.enlAdresse,c.enlCp,c.enlVille), b=await geocoder(c.livAdresse,c.livCp,c.livVille); if(!a||!b) return null;
+  const u=new URL("https://data.geopf.fr/navigation/itineraire"); u.searchParams.set("resource","bdtopo-osrm"); u.searchParams.set("profile","car"); u.searchParams.set("optimization","fastest");
+  u.searchParams.set("start",a.join(",")); u.searchParams.set("end",b.join(",")); u.searchParams.set("getSteps","false"); u.searchParams.set("geometryFormat","polyline");
+  const r=await fetch(u); if(!r.ok) throw new Error("itineraire "+r.status); const j=await r.json(); const d=Number(j.distance); if(!(d>=0)) return null;
+  return Math.round((j.distanceUnit==="kilometer"?d:d/1000)*10)/10;
+}
+// file d'attente : quelques transports à la fois, sans bloquer l'écran ; une adresse introuvable n'est pas réessayée en boucle
+async function kmFile(){
+  if(KM.busy || KM.off || !T.isStaff() || !kmActif()) return;
+  const lim=T.addDays(todayIso(),-120);
+  const todo=S.courses.filter(c=>{ if(c.statut==="annulee" || !kmPret(c) || (c.enlDate && c.enlDate<lim)) return false; const k=kmCle(c); if(KM.ko.has(c.id+k)) return false; return c.km==null || (c.kmCle!==k && c.kmCle!=="manuel:"+k); }).slice(0,6);
+  if(!todo.length) return; KM.busy=true; let n=0;
+  for(const c of todo){ const k=kmCle(c);
+    try{ const km=await calcKm(c); if(km==null){ KM.ko.add(c.id+k); continue; }
+      const {error}=await sb.from("courses").update({km,km_cle:k}).eq("id",c.id); if(error){ KM.off=true; break; } c.km=km; c.kmCle=k; n++; }
+    catch(e){ KM.ko.add(c.id+k); }
+    await new Promise(r=>setTimeout(r,300)); }
+  KM.busy=false; if(n){ render(); setTimeout(kmFile,500); }
+}
+T.onData.push(()=>{ setTimeout(kmFile,600); });
+const kmBloc = c => { if(!kmActif() || c.statut==="annulee") return "";
+  const manuel=String(c.kmCle||"").startsWith("manuel:"); const etat = c.km==null ? (kmPret(c)?"calcul automatique en attente, ou adresse introuvable":"renseignez les villes d'enlèvement et de livraison") : manuel ? "saisie à la main" : "calculée automatiquement, trajet routier enlèvement → livraison";
+  return `<div class="bar" style="font-size:13px;gap:8px"><b>Distance :</b><input class="fin num" type="number" step="0.1" min="0" id="kmIn" value="${esc(c.km??"")}" style="width:110px" aria-label="Distance en kilomètres"><span>km</span><span class="muted" style="flex:1;min-width:160px">${etat}</span><button type="button" class="btn btn-ghost btn-sm" data-f="kmsave" data-id="${esc(c.id)}">Enregistrer la distance</button><button type="button" class="btn btn-ghost btn-sm" data-f="kmcalc" data-id="${esc(c.id)}">Recalculer</button></div>`; };
+
 /* ---------- ACTIVITÉ PAR CHAUFFEUR : jour, semaine, mois ---------- */
 const A = { cond:"", mode:"semaine", ref:todayIso() };
 const mn = h => h ? Number(h.slice(0,2))*60+Number(h.slice(3,5)) : null;
@@ -186,7 +227,7 @@ function actStats(condId, from, to){
   L.forEach(c=>{ const a=mn(c.arriveeEnl), ch=mn(c.chargeEnl); if(a!=null&&ch!=null&&ch>=a){ charge+=ch-a; nCharge++; }
     [[c.arriveeEnl,c.enlHeureFin||c.enlHeure],[c.arriveeLiv,c.livHeureFin||c.livHeure]].forEach(([reel,prevu])=>{ const r=mn(reel), pr=mn(prevu); if(r!=null&&pr!=null){ mes++; if(r>pr+TOL) ret++; } }); });
   const jours={}; L.forEach(c=>{ const j=jours[c.enlDate]=jours[c.enlDate]||{deb:null,fin:null,n:0,cs:[]}; j.n++; j.cs.push(c); const a=mn(c.arriveeEnl), l=(!c.livDate||c.livDate===c.enlDate)?mn(c.livre):null; if(a!=null&&(j.deb==null||a<j.deb)) j.deb=a; if(l!=null&&(j.fin==null||l>j.fin)) j.fin=l; });
-  return { L, fin, ca:fin.reduce((t,c)=>t+(Number(c.prix)||0),0), charge, nCharge, mes, ret, jours,
+  return { L, fin, km:fin.reduce((t,c)=>t+(Number(c.km)||0),0), kmN:fin.filter(c=>c.km!=null).length, ca:fin.reduce((t,c)=>t+(Number(c.prix)||0),0), charge, nCharge, mes, ret, jours,
     res:L.filter(c=>c.reserve).length, inc:L.reduce((t,c)=>t+(Array.isArray(c.incidents)?c.incidents.length:0),0),
     bl:fin.filter(c=>(c.docs||[]).some(d=>d.type==="bl")).length, sig:fin.filter(c=>c.signataire).length, joursTrav:Object.keys(jours).length };
 }
@@ -200,23 +241,23 @@ T.views.activite = () => {
       <button type="button" class="btn btn-ghost btn-sm" data-f="actnav" data-v="0">Aujourd'hui</button></div>`;
   let corps;
   if(!k){ const rows=conds.map(c=>({c,s:actStats(c.id,P.from,P.to)}));
-    const tot=rows.reduce((t,r)=>({n:t.n+r.s.fin.length,ca:t.ca+r.s.ca}),{n:0,ca:0});
-    corps=`<div class="kpis"><div class="kpi"><small>Courses terminées</small><b class="num">${tot.n}</b></div><div class="kpi"><small>Chiffre d'affaires HT</small><b class="num">${money(tot.ca)}</b></div><div class="kpi"><small>Chauffeurs actifs sur la période</small><b class="num">${rows.filter(r=>r.s.L.length).length} / ${conds.length}</b></div></div>
-    <div class="pan"><h2>Comparatif — ${esc(P.txt)}</h2><div class="tbl-wrap"><table><thead><tr><th>Chauffeur</th><th>Jours travaillés</th><th>Courses terminées</th><th>Restant à faire</th><th style="text-align:right">CA HT</th><th>Retards</th><th>Réserves</th><th>Problèmes signalés</th><th>BL manquants</th></tr></thead><tbody>
-    ${rows.map(({c,s})=>`<tr class="click" tabindex="0" data-f="actpick" data-id="${esc(c.id)}"><td><b>${esc(c.nom)}</b></td><td class="num">${s.joursTrav}</td><td class="num">${s.fin.length}</td><td class="num">${s.L.length-s.fin.length}</td><td class="num" style="text-align:right">${money(s.ca)}</td><td class="num">${s.mes?`${s.ret} / ${s.mes}`:"—"}</td><td class="num">${s.res}</td><td class="num">${s.inc}</td><td class="num">${s.fin.length-s.bl?`<span style="color:var(--danger);font-weight:700">${s.fin.length-s.bl}</span>`:"0"}</td></tr>`).join("")||`<tr><td colspan="9"><div class="empty">Aucun conducteur.</div></td></tr>`}</tbody></table></div>
+    const tot=rows.reduce((t,r)=>({n:t.n+r.s.fin.length,ca:t.ca+r.s.ca,km:t.km+r.s.km}),{n:0,ca:0,km:0});
+    corps=`<div class="kpis"><div class="kpi"><small>Courses terminées</small><b class="num">${tot.n}</b></div><div class="kpi"><small>Chiffre d'affaires HT</small><b class="num">${money(tot.ca)}</b></div>${kmActif()?`<div class="kpi"><small>Kilomètres en charge</small><b class="num">${kmTxt(tot.km)}</b></div>`:""}<div class="kpi"><small>Chauffeurs actifs sur la période</small><b class="num">${rows.filter(r=>r.s.L.length).length} / ${conds.length}</b></div></div>
+    <div class="pan"><h2>Comparatif — ${esc(P.txt)}</h2><div class="tbl-wrap"><table><thead><tr><th>Chauffeur</th><th>Jours travaillés</th><th>Courses terminées</th><th>Restant à faire</th><th style="text-align:right">CA HT</th>${kmActif()?`<th style="text-align:right">Km en charge</th><th style="text-align:right">CA / km</th>`:""}<th>Retards</th><th>Réserves</th><th>Problèmes signalés</th><th>BL manquants</th></tr></thead><tbody>
+    ${rows.map(({c,s})=>`<tr class="click" tabindex="0" data-f="actpick" data-id="${esc(c.id)}"><td><b>${esc(c.nom)}</b></td><td class="num">${s.joursTrav}</td><td class="num">${s.fin.length}</td><td class="num">${s.L.length-s.fin.length}</td><td class="num" style="text-align:right">${money(s.ca)}</td>${kmActif()?`<td class="num" style="text-align:right">${s.kmN?kmTxt(s.km):"—"}</td><td class="num" style="text-align:right">${s.km>0?money(s.ca/s.km):"—"}</td>`:""}<td class="num">${s.mes?`${s.ret} / ${s.mes}`:"—"}</td><td class="num">${s.res}</td><td class="num">${s.inc}</td><td class="num">${s.fin.length-s.bl?`<span style="color:var(--danger);font-weight:700">${s.fin.length-s.bl}</span>`:"0"}</td></tr>`).join("")||`<tr><td colspan="11"><div class="empty">Aucun conducteur.</div></td></tr>`}</tbody></table></div>
     <span class="muted" style="font-size:12px">Cliquez sur un chauffeur pour voir le détail de ses courses. Retards : arrivées plus de ${TOL} minutes après l'heure prévue, sur le nombre d'arrivées mesurées.</span></div>`;
   } else { const s=actStats(k.id,P.from,P.to); const dates=Object.keys(s.jours).sort();
-    corps=`<div class="kpis"><div class="kpi"><small>Courses terminées</small><b class="num">${s.fin.length}${s.L.length-s.fin.length?` <span class="muted" style="font-size:13px">+ ${s.L.length-s.fin.length} à faire</span>`:""}</b></div><div class="kpi"><small>Chiffre d'affaires HT</small><b class="num">${money(s.ca)}</b></div><div class="kpi"><small>Jours travaillés</small><b class="num">${s.joursTrav}</b></div>
+    corps=`<div class="kpis"><div class="kpi"><small>Courses terminées</small><b class="num">${s.fin.length}${s.L.length-s.fin.length?` <span class="muted" style="font-size:13px">+ ${s.L.length-s.fin.length} à faire</span>`:""}</b></div><div class="kpi"><small>Chiffre d'affaires HT</small><b class="num">${money(s.ca)}</b></div><div class="kpi"><small>Jours travaillés</small><b class="num">${s.joursTrav}</b></div>${kmActif()?`<div class="kpi"><small>Kilomètres en charge</small><b class="num">${s.kmN?kmTxt(s.km):"—"}</b></div><div class="kpi"><small>CA au kilomètre</small><b class="num">${s.km>0?money(s.ca/s.km):"—"}</b></div>`:""}
       <div class="kpi ${s.ret?"warn":""}"><small>Retards (plus de ${TOL} min)</small><b class="num">${s.mes?`${s.ret} / ${s.mes}`:"—"}</b></div><div class="kpi"><small>Temps de chargement moyen</small><b class="num">${s.nCharge?duree(Math.round(s.charge/s.nCharge)):"—"}</b></div>
       <div class="kpi ${s.res?"bad":""}"><small>Réserves</small><b class="num">${s.res}</b></div><div class="kpi ${s.inc?"bad":""}"><small>Problèmes signalés</small><b class="num">${s.inc}</b></div><div class="kpi ${s.fin.length-s.bl?"bad":""}"><small>BL envoyés</small><b class="num">${s.bl} / ${s.fin.length}</b></div></div>
     ${dates.length?dates.map(d=>{ const j=s.jours[d];
       return `<div class="pan"><div class="bar"><h2 style="flex:1">${esc(frDate(d,{weekday:"long",day:"numeric",month:"long"}))}</h2><span class="muted">${j.n} course${j.n>1?"s":""} · première arrivée ${hm(j.deb)} · dernière livraison ${hm(j.fin)}${j.deb!=null&&j.fin!=null&&j.fin>=j.deb?" · amplitude "+duree(j.fin-j.deb):""}</span></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Client</th><th>Trajet</th><th>Prévu</th><th>Arrivé enl.</th><th>Chargé</th><th>Arrivé liv.</th><th>Livré</th><th>Suivi</th><th style="text-align:right">Prix HT</th></tr></thead><tbody>${j.cs.map(c=>{ const late=(r,p)=>{ const a=mn(r), b=mn(p); return a!=null&&b!=null&&a>b+TOL; };
+      <div class="tbl-wrap"><table><thead><tr><th>Client</th><th>Trajet</th>${kmActif()?`<th style="text-align:right">Km</th>`:""}<th>Prévu</th><th>Arrivé enl.</th><th>Chargé</th><th>Arrivé liv.</th><th>Livré</th><th>Suivi</th><th style="text-align:right">Prix HT</th></tr></thead><tbody>${j.cs.map(c=>{ const late=(r,p)=>{ const a=mn(r), b=mn(p); return a!=null&&b!=null&&a>b+TOL; };
         const notes=[c.statut!=="terminee"?`<span class="chip st-${esc(c.statut)}">${c.statut==="en_cours"?"En cours":"À faire"}</span>`:"", c.reserve?`<span class="chip late">Réserve</span>`:"", (c.incidents||[]).length?`<span class="chip late">${c.incidents.length} problème${c.incidents.length>1?"s":""}</span>`:"", c.statut==="terminee"&&!(c.docs||[]).some(x=>x.type==="bl")?`<span class="chip late">BL manquant</span>`:"", c.signataire?`<span class="chip st-terminee">Signé</span>`:""].filter(Boolean).join(" ");
         const cel=(v,l)=>`<td class="num"${l?' style="color:var(--danger);font-weight:700"':""}>${esc(v||"—")}${l?" (retard)":""}</td>`;
-        return `<tr><td><b>${esc(c.donneur||"")}</b>${c.ref?`<div class="muted">Réf. ${esc(c.ref)}</div>`:""}</td><td>${esc(c.enlVille||"?")} → ${esc(c.livVille||"?")}</td><td class="num">${esc(c.enlHeure||"—")} → ${esc(c.livHeure||"—")}</td>${cel(c.arriveeEnl,late(c.arriveeEnl,c.enlHeureFin||c.enlHeure))}${cel(c.chargeEnl)}${cel(c.arriveeLiv,late(c.arriveeLiv,c.livHeureFin||c.livHeure))}${cel(c.livre)}<td>${notes||`<span class="muted">RAS</span>`}</td><td class="num" style="text-align:right">${c.prix?money(c.prix):"—"}</td></tr>`; }).join("")}</tbody></table></div></div>`; }).join("")
+        return `<tr><td><b>${esc(c.donneur||"")}</b>${c.ref?`<div class="muted">Réf. ${esc(c.ref)}</div>`:""}</td><td>${esc(c.enlVille||"?")} → ${esc(c.livVille||"?")}</td>${kmActif()?`<td class="num" style="text-align:right">${kmTxt(c.km)}</td>`:""}<td class="num">${esc(c.enlHeure||"—")} → ${esc(c.livHeure||"—")}</td>${cel(c.arriveeEnl,late(c.arriveeEnl,c.enlHeureFin||c.enlHeure))}${cel(c.chargeEnl)}${cel(c.arriveeLiv,late(c.arriveeLiv,c.livHeureFin||c.livHeure))}${cel(c.livre)}<td>${notes||`<span class="muted">RAS</span>`}</td><td class="num" style="text-align:right">${c.prix?money(c.prix):"—"}</td></tr>`; }).join("")}</tbody></table></div></div>`; }).join("")
      :`<div class="pan"><div class="empty">Aucune course pour ${esc(k.nom)} sur cette période.</div></div>`}
-    <span class="muted" style="font-size:12px">Les heures sont celles validées par le chauffeur dans Dream Chauffeur. Ce relevé suit l'activité : il ne remplace pas le chronotachygraphe pour le temps de travail et de conduite.</span>`; }
+    <span class="muted" style="font-size:12px">Les heures sont celles validées par le chauffeur dans Dream Chauffeur. Ce relevé suit l'activité : il ne remplace pas le chronotachygraphe pour le temps de travail et de conduite.${kmActif()?" Les kilomètres sont ceux du trajet routier entre l'enlèvement et la livraison des courses terminées (hors approche et retour à vide).":""}</span>`; }
   return tete+`<div id="actBody" style="display:flex;flex-direction:column;gap:14px">${corps}</div>`;
 };
 
@@ -439,6 +480,12 @@ document.addEventListener("click", async e=>{
     const r=await newPiece("facture",{client_id:p.client_id,lignes,total_ht:t.ht,total_tva:t.tva,total_ttc:t.ttc,notes:`Selon devis ${p.numero}`}); if(r.error){ toast(fErr(r.error)); return; }
     await load(); location.hash="factures"; render(); openPiece(r.data.id); }
   else if(a==="relance"){ openRelance(d.client); }
+  else if(a==="kmsave"){ const c=S.courses.find(x=>x.id===d.id); if(!c) return; const v=$("#kmIn").value.trim(); const km=v===""?null:Number(v.replace(",",".")); if(km!=null && !(km>=0 && km<10000)){ toast("Indiquez une distance en kilomètres."); return; }
+    const {error}=await sb.from("courses").update({km,km_cle:km==null?null:"manuel:"+kmCle(c)}).eq("id",c.id); if(error){ toast(fErr(error)); return; } c.km=km; c.kmCle=km==null?null:"manuel:"+kmCle(c); KM.ko.delete(c.id+kmCle(c)); toast(km==null?"Distance effacée : elle sera recalculée automatiquement":"Distance enregistrée"); }
+  else if(a==="kmcalc"){ const c=S.courses.find(x=>x.id===d.id); if(!c) return; if(!kmPret(c)){ toast("Renseignez d'abord les villes d'enlèvement et de livraison, puis enregistrez."); return; } el.disabled=true; el.textContent="Calcul…";
+    let km=null; try{ km=await calcKm(c); }catch(e){} el.disabled=false; el.textContent="Recalculer";
+    if(km==null){ toast("Distance introuvable : vérifiez les adresses, ou saisissez-la à la main."); return; }
+    const {error}=await sb.from("courses").update({km,km_cle:kmCle(c)}).eq("id",c.id); if(error){ toast(fErr(error)); return; } c.km=km; c.kmCle=kmCle(c); const i=$("#kmIn"); if(i) i.value=km; toast("Distance calculée : "+kmTxt(km)); }
   else if(a==="actmode"){ A.mode=d.v; render(); }
   else if(a==="actnav"){ if(d.v==="0") A.ref=todayIso(); else actDecale(Number(d.v)); render(); }
   else if(a==="actpick"){ A.cond=d.id; render(); window.scrollTo(0,0); }
