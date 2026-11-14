@@ -540,34 +540,45 @@ function vDriver(){
     <p class="muted" style="text-align:center;font-size:12px;margin:0">Chaque bouton envoie l'heure réelle à l'exploitation.</p>${back}</div>`;
 }
 function jobHtml(c,n,cur){
-  const st=c.statut; const done=st==="terminee";
-  const step=(ok,title,lines)=>`<div class="step"><span class="dot ${ok?"ok":""}" aria-label="${ok?"Fait":"À faire"}">${ok?"✓":""}</span><div><b>${title}</b>${lines}</div></div>`;
+  const st=c.statut; const done=st==="terminee"||st==="annulee"; const id=esc(c.id);
   const maps=(a,cp,v)=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([a,cp,v].filter(Boolean).join(" "))}`;
-  let action="";
-  if(!done){
-    if(S.reserveFor===c.id) action=`<label class="fld">Décrivez la réserve (casse, manquant, retard…)<textarea id="resTxt"></textarea></label><div class="two"><button type="button" class="btn btn-ghost" data-drv="resCancel" data-id="${esc(c.id)}">Annuler</button><button type="button" class="btn btn-danger" data-drv="resOk" data-id="${esc(c.id)}">Valider la livraison</button></div>`;
-    else if(!c.arriveeEnl) action=`<button type="button" class="btn btn-navy big" data-drv="arrivee_enl" data-id="${esc(c.id)}">Je suis arrivé à l'enlèvement</button>`;
-    else if(!c.chargeEnl) action=`<button type="button" class="btn btn-navy big" data-drv="charge_enl" data-id="${esc(c.id)}">Chargement terminé</button>`;
-    else if(!c.arriveeLiv) action=`<button type="button" class="btn btn-navy big" data-drv="arrivee_liv" data-id="${esc(c.id)}">Je suis arrivé à la livraison</button>`;
-    else action=`<div class="two"><button type="button" class="btn btn-accent big" data-drv="livre" data-id="${esc(c.id)}">Livré sans réserve</button><button type="button" class="btn btn-danger big" data-drv="reserve" data-id="${esc(c.id)}">Livré avec réserves</button></div>`;
-  }
+  // prochaine étape à valider : chaque bouton est placé directement sous l'enlèvement ou la livraison concernés
+  const next = done ? null : !c.arriveeEnl ? "arrivee_enl" : !c.chargeEnl ? "charge_enl" : !c.arriveeLiv ? "arrivee_liv" : "livre";
+  const enlCur = next==="arrivee_enl"||next==="charge_enl", livCur = next==="arrivee_liv"||next==="livre";
+  let enlBtn="", livBtn="";
+  if(next==="arrivee_enl") enlBtn=`<button type="button" class="btn btn-navy big" data-drv="arrivee_enl" data-id="${id}">Je suis arrivé à l'enlèvement</button>`;
+  else if(next==="charge_enl") enlBtn=`<button type="button" class="btn btn-navy big" data-drv="charge_enl" data-id="${id}">Chargement terminé</button>`;
+  else if(next==="arrivee_liv") livBtn=`<button type="button" class="btn btn-navy big" data-drv="arrivee_liv" data-id="${id}">Je suis arrivé à la livraison</button>`;
+  else if(next==="livre") livBtn = S.reserveFor===c.id
+    ? `<label class="fld">Décrivez la réserve (casse, manquant, retard…)<textarea id="resTxt"></textarea></label><div class="two"><button type="button" class="btn btn-ghost" data-drv="resCancel" data-id="${id}">Annuler</button><button type="button" class="btn btn-danger" data-drv="resOk" data-id="${id}">Valider la livraison</button></div>`
+    : `<div class="two"><button type="button" class="btn btn-accent big" data-drv="livre" data-id="${id}">Livré sans réserve</button><button type="button" class="btn btn-danger big" data-drv="reserve" data-id="${id}">Livré avec réserves</button></div>`;
+  // le rond est aussi un bouton : un appui valide l'étape en cours
+  const dot=(ok,isCur,which)=>{
+    if(ok) return `<span class="dot ok" aria-label="Fait">✓</span>`;
+    if(!next) return `<span class="dot"></span>`;
+    if(isCur && next!=="livre") return `<button type="button" class="dot cur" data-drv="${next}" data-id="${id}" aria-label="Valider l'étape"></button>`;
+    if(isCur) return `<span class="dot cur" aria-label="À faire maintenant"></span>`;
+    return `<button type="button" class="dot" data-drv="pasencore" data-id="${id}" data-which="${which}" aria-label="À faire plus tard"></button>`;
+  };
+  const sub=(lbl,t)=>`<span class="sub ${t?"ok":""}">${t?"✓ ":""}${lbl}${t?" "+esc(t):""}</span>`;
+  const step=(ok,isCur,which,title,heure,lines,subs,btn)=>`<div class="step ${isCur?"now":""}">${dot(ok,isCur,which)}<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px"><b>${title}${heure?" · "+esc(heure):""}</b>${lines}<div class="subs">${subs}</div>${btn}</div></div>`;
   const m=[c.palettes&&c.palettes+" palettes",c.colis&&c.colis+" colis",c.poids&&Number(c.poids).toLocaleString("fr-FR")+" kg",c.metres&&c.metres+" m"].filter(Boolean).join(" · ");
   const bl=(c.docs||[]).filter(d=>d.type==="bl").length;
   return `<article class="job ${cur?"cur":""}">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:16px">${n} · ${esc(c.donneur||"")}</b><span class="chip st-${esc(st)}">${esc(STATUTS[st]?.l||"")}</span></div>
-    ${step(!!c.chargeEnl,"Enlèvement · "+esc(c.enlHeure||""),`<div>${esc(c.enlNom||"")}</div><div>${esc(c.enlAdresse||"")} ${esc(c.enlCp||"")} ${esc(c.enlVille||"")}</div>${c.arriveeEnl?`<div class="muted">Arrivé ${esc(c.arriveeEnl)}${c.chargeEnl?" · chargé "+esc(c.chargeEnl):""}</div>`:""}<a href="${maps(c.enlAdresse,c.enlCp,c.enlVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`)}
-    ${step(!!c.livre,"Livraison · "+esc(c.livHeure||""),`<div>${esc(c.livNom||"")}</div><div>${esc(c.livAdresse||"")} ${esc(c.livCp||"")} ${esc(c.livVille||"")}</div>${c.arriveeLiv?`<div class="muted">Arrivé ${esc(c.arriveeLiv)}${c.livre?" · livré "+esc(c.livre):""}</div>`:""}<a href="${maps(c.livAdresse,c.livCp,c.livVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`)}
+    ${step(!!c.chargeEnl,enlCur,"enl","Enlèvement",c.enlHeure,`<div>${esc(c.enlNom||"")}</div><div>${esc(c.enlAdresse||"")} ${esc(c.enlCp||"")} ${esc(c.enlVille||"")}</div><a href="${maps(c.enlAdresse,c.enlCp,c.enlVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,sub("Arrivé",c.arriveeEnl)+sub("Chargé",c.chargeEnl),enlBtn)}
+    ${step(!!c.livre,livCur,"liv","Livraison",c.livHeure,`<div>${esc(c.livNom||"")}</div><div>${esc(c.livAdresse||"")} ${esc(c.livCp||"")} ${esc(c.livVille||"")}</div><a href="${maps(c.livAdresse,c.livCp,c.livVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,sub("Arrivé",c.arriveeLiv)+sub("Livré",c.livre),livBtn)}
     ${vehLabel(c)?`<div style="font-size:13px"><b>Véhicule :</b> ${esc(vehLabel(c))}</div>`:""}
     ${m||c.ref?`<div class="muted" style="font-size:13px">${esc(m)}${c.ref?" · Réf. "+esc(c.ref):""}</div>`:""}
     ${c.instructions?`<div style="background:var(--accent-soft);border-radius:8px;padding:8px 10px;font-size:13px"><b>Consignes :</b> ${esc(c.instructions)}</div>`:""}
     ${c.contact?`<div style="font-size:13px">Contact : <span style="user-select:all">${esc(c.contact)}</span></div>`:""}
     ${c.reserve?`<div class="alert"><b>Réserve :</b> ${esc(c.reserve)}</div>`:""}
-    ${action}
-    <label class="btn btn-ghost" style="position:relative">Photo BL / CMR${bl?` (${bl})`:""}<input type="file" accept="image/*,application/pdf" class="hidden-file" data-bl="${esc(c.id)}"></label>
-    ${c.arriveeEnl&&!done?`<button type="button" class="btn btn-ghost btn-sm" data-drv="annuler" data-id="${esc(c.id)}" style="align-self:center">Annuler la dernière étape</button>`:""}
+    <label class="btn btn-ghost" style="position:relative">Photo BL / CMR${bl?` (${bl})`:""}<input type="file" accept="image/*,application/pdf" class="hidden-file" data-bl="${id}"></label>
+    ${c.arriveeEnl&&!done?`<button type="button" class="btn btn-ghost btn-sm" data-drv="annuler" data-id="${id}" style="align-self:center">Annuler la dernière étape</button>`:""}
   </article>`;
 }
-async function drvAction(act,id){
+async function drvAction(act,id,el){
+  if(act==="pasencore"){ toast("Valide d'abord l'enlèvement : arrivé, puis chargé."); return; }
   if(act==="reserve"){ S.reserveFor=id; render(); const r=$("#resTxt"); r&&r.focus(); return; }
   if(act==="resCancel"){ S.reserveFor=null; render(); return; }
   let etape=act, reserve=null;
@@ -750,7 +761,7 @@ document.addEventListener("click",async e=>{
   else if(d.repos){ const k=condById(d.repos); if(!k) return; const r=new Set(k.repos||[]); r.has(S.date)?r.delete(S.date):r.add(S.date); await tableWrite("conducteurs","update",k.id,{repos:[...r].filter(x=>x>=addDays(todayIso(),-60))}); }
   else if(d.fst){ S.fStatut=d.fst; if(S.view!=="courses") location.hash="courses"; else render(); }
   else if(d.fper){ S.fPeriode=d.fper; render(); }
-  else if(d.drv){ drvAction(d.drv,d.id); }
+  else if(d.drv){ drvAction(d.drv,d.id,el); }
   else if(d.dday){ S.drvDay=d.dday; render(); }
   else if(d.impedit!==undefined){ editImport(Number(d.impedit)); }
   else if(d.impdel!==undefined){ S.importList.splice(Number(d.impdel),1); showImport(); }
