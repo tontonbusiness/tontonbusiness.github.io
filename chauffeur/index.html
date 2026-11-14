@@ -186,6 +186,27 @@ button.dot{background:var(--surface);cursor:pointer;padding:0;width:34px;height:
 .subs{display:flex;flex-wrap:wrap;gap:6px}
 .sub{font-size:12px;border:1px solid var(--line);border-radius:99px;padding:2px 9px;color:var(--muted)}
 .sub.ok{border-color:var(--done-bd);color:var(--done-bd);font-weight:600}
+.prog{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
+.prog-bar{flex:1;height:8px;border-radius:99px;background:rgba(255,255,255,.22);overflow:hidden}
+.prog-bar span{display:block;height:100%;border-radius:99px;background:var(--accent)}
+.jobline{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font:inherit;color:var(--fg);cursor:pointer}
+.jl-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;font-size:13px}
+.jl-main b{font-size:15px}
+.jl-chev{font-size:13px;font-weight:600;color:var(--accent-ink);text-decoration:underline;flex:none}
+.dayhead{display:flex;align-items:center;gap:10px;font-size:17px}
+.dayhead .dot{width:34px;height:34px;font-size:16px}
+.recap{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.recap-i{background:var(--surface-2);border-radius:10px;padding:8px 10px;font-size:12px;color:var(--muted);display:flex;flex-direction:column}
+.recap-i b{font-size:20px;color:var(--fg);font-variant-numeric:tabular-nums}
+.drvmodal{display:flex;flex-direction:column;gap:12px}
+.nextcard{border:2px solid var(--accent);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px;font-size:14px}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink)}
+.okline{color:var(--done-bd);font-weight:600;font-size:14px}
+.sigwrap{position:relative;border:2px dashed var(--line);border-radius:12px;overflow:hidden;background:#FFFFFF}
+.sigwrap canvas{display:block;width:100%;height:190px;touch-action:none}
+.sighint{position:absolute;inset:0;display:grid;place-items:center;color:#7A8594;font-size:14px;pointer-events:none}
+.inctypes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.inctypes .btn{min-height:48px}
 .big{min-height:54px;font-size:16px;width:100%}
 .two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .hidden-file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
@@ -237,6 +258,6 @@ button.dot{background:var(--surface);cursor:pointer;padding:0;width:34px;height:
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>window.TP_MODE="chauffeur";</script>
 <script src="../app/config.js?v=4"></script>
-<script src="../app/app.js?v=6"></script>
+<script src="../app/app.js?v=7"></script>
 </body>
 </html>

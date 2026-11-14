@@ -32,7 +32,22 @@ const TIME_KEYS = ["enlHeure","enlHeureFin","livHeure","livHeureFin","arriveeEnl
 const S = { session:null, mem:null, entreprise:null, courses:[], conducteurs:[], camions:[], remorques:[], membres:[], loaded:false,
   view:"planning", date: todayIso(), mode:"conducteur", fStatut:"tous", fQ:"", fPeriode:"tout",
   iPeriode:"30", iCond:"", iDonneur:"", me: store.get("tp_me") || "", drvDay:"today", reserveFor:null,
-  importList:null, importDoc:null, authMode:"login", authErr:"", recovery:false };
+  importList:null, importDoc:null, authMode:"login", authErr:"", recovery:false,
+  openJobs:new Set(), doneFor:null, sign:null, incType:null, incN:null };
+/* problèmes signalés par le conducteur + signature du destinataire */
+const INC = { retard:"Retard", attente:"Attente sur site", absent:"Client absent", casse:"Casse / manquant", acces:"Accès impossible", panne:"Panne véhicule", autre:"Autre" };
+const packOn = () => S.courses.some(c=>"incidents" in c); // base de données à jour (signalement + signature)
+const incOf = c => Array.isArray(c.incidents) ? c.incidents : [];
+const incNew = c => incOf(c).filter(i=>!i.vu);
+const hasBL = c => (c.docs||[]).some(d=>d.type==="bl");
+const DRV_ST = ["envoyee","en_cours","terminee"];
+// courses d'un conducteur pour un jour : celles qui s'enlèvent ou se livrent ce jour-là, plus (aujourd'hui) celles des 7 derniers jours pas encore terminées
+function inDay(c,d){ const a=c.enlDate, b=(c.livDate&&c.livDate>=c.enlDate)?c.livDate:c.enlDate; if(!a) return false;
+  if(a<=d && d<=b) return true;
+  return d===todayIso() && b<d && a>=addDays(d,-7) && (c.statut==="envoyee"||c.statut==="en_cours"); }
+function myDay(condId,d){ return S.courses.filter(c=>c.conducteurId===condId && DRV_ST.includes(c.statut) && inDay(c,d))
+  .sort((x,y)=>(x.enlDate||"").localeCompare(y.enlDate||"") || (toMin(x.enlHeure)||0)-(toMin(y.enlHeure)||0)); }
+const gmaps=(a,cp,v)=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([a,cp,v].filter(Boolean).join(" "))}`;
 const isStaff = () => S.mem && (S.mem.role==="admin" || S.mem.role==="exploitant");
 const EID = () => S.mem && S.mem.entreprise_id;
 
@@ -75,6 +90,10 @@ async function loadData(){
   S.courses=(r[0].data||[]).map(fromDb); S.conducteurs=(r[1].data||[]).map(fromDb); S.camions=(r[2].data||[]).map(fromDb); S.remorques=(r[3].data||[]).map(fromDb);
   S.membres = r[4] ? (r[4].data||[]) : [];
   S.acces = r[5] ? (r[5].data||[]).filter(a=>new Date(a.expire_le)>new Date()) : [];
+  if(isStaff()){ const n=S.courses.reduce((t,c)=>t+incNew(c).length,0);
+    if(S.incN!=null && n>S.incN){ const c=S.courses.filter(x=>incNew(x).length).sort((x,y)=>String(incNew(y).slice(-1)[0].le).localeCompare(String(incNew(x).slice(-1)[0].le)))[0];
+      const i=c&&incNew(c).slice(-1)[0]; if(i) toast(`Problème signalé par ${condById(c.conducteurId)?.nom||"un conducteur"} : ${INC[i.type]||"Autre"}`); }
+    S.incN=n; }
   S.loaded=true; render();
 }
 let channel=null;
@@ -239,6 +258,7 @@ function vPlanning(){
   const conds = activeConds(), cams = activeCams();
   const rowsSrc = S.mode==="conducteur" ? conds : cams;
   const alerts=[];
+  S.courses.filter(c=>incNew(c).length).slice(0,8).forEach(c=>incNew(c).forEach(i=>alerts.push(`<div class="alert" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between"><span><b>Problème signalé${i.heure?" à "+esc(i.heure):""} :</b> ${esc(INC[i.type]||"Autre")} — ${esc(condById(c.conducteurId)?.nom||"Conducteur")} · ${esc(c.donneur||"")}${i.commentaire?" — "+esc(i.commentaire):""}</span><button type="button" class="btn btn-ghost btn-sm" data-open="${esc(c.id)}">Ouvrir la course</button></div>`)));
   const rowsHtml = rowsSrc.map(r=>{
     const mine = day.filter(c=>(S.mode==="conducteur"?c.conducteurId:c.camionId)===r.id && c.statut!=="a_planifier");
     const L = lanes(mine);
@@ -298,7 +318,7 @@ function cardHtml(c){
     <span class="t"><b>${esc(c.donneur||"Sans client")}</b><b class="num">${c.prix?eur(c.prix):""}</b></span>
     <span>↑ ${esc(c.enlHeure||"--:--")} ${esc(c.enlVille||"")}${c.enlCp?" ("+esc(String(c.enlCp).slice(0,2))+")":""}</span>
     <span>↓ ${esc(c.livHeure||"--:--")} ${esc(c.livVille||"")}${c.livCp?" ("+esc(String(c.livCp).slice(0,2))+")":""}</span>
-    ${m?`<span class="muted">${esc(m)}</span>`:""}${c.ref?`<span class="muted">Réf. ${esc(c.ref)}</span>`:""}</button>`;
+    ${m?`<span class="muted">${esc(m)}</span>`:""}${c.ref?`<span class="muted">Réf. ${esc(c.ref)}</span>`:""}${incNew(c).length?`<span style="color:var(--danger);font-weight:700">Problème : ${esc(INC[incNew(c).slice(-1)[0].type]||"Autre")}</span>`:""}</button>`;
 }
 after.planning = ()=>{
   const d=$("#pDate"); d && d.addEventListener("change",()=>{ if(d.value){ S.date=d.value; render(); } });
@@ -358,6 +378,7 @@ function vCourses(){
 }
 function statChip(c){ const st=c.statut||"a_planifier"; let x=`<span class="chip st-${esc(st)}">${esc(STATUTS[st]?.l||st)}</span>`;
   if(c.reserve) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Réserve</span></div>`;
+  if(incNew(c).length) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Problème signalé</span></div>`;
   if(c.modifieApresEnvoi && st==="envoyee") x+=`<div class="muted" style="font-size:11px;margin-top:3px">Modifiée après envoi</div>`;
   return x; }
 after.courses = ()=>{ const q=$("#fQ"); if(q){ q.addEventListener("input",()=>{ S.fQ=q.value; const pos=q.selectionStart; render(); const n=$("#fQ"); n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} }); }
@@ -380,7 +401,10 @@ function courseForm(c,opts={}){
   const camOpts=`<option value="">— Aucun —</option>`+activeCams().map(k=>`<option value="${esc(k.id)}" ${c.camionId===k.id?"selected":""}>${esc(k.immat)} · ${esc(k.type||"")}</option>`).join("");
   const remOpts=`<option value="">— Aucune —</option>`+activeRems().map(k=>`<option value="${esc(k.id)}" ${c.remorqueId===k.id?"selected":""}>${esc(k.immat)}</option>`).join("");
   const stOpts=Object.entries(STATUTS).map(([k,v])=>`<option value="${k}" ${(c.statut||"a_planifier")===k?"selected":""}>${v.l}</option>`).join("");
-  const docs=(c.docs||[]).map((d,i)=>`<li><button type="button" class="linkbtn" data-doc="${esc(d.path)}">${esc(d.type==="confirmation"?"Confirmation client":d.type==="bl"?"BL / CMR":"Document")} — ${esc(d.nom||"")}</button></li>`).join("");
+  const docs=(c.docs||[]).map((d,i)=>`<li><button type="button" class="linkbtn" data-doc="${esc(d.path)}">${esc(d.type==="confirmation"?"Confirmation client":d.type==="bl"?"BL / CMR":d.type==="signature"?"Signature du destinataire":"Document")} — ${esc(d.nom||"")}</button></li>`).join("");
+  const incs=incOf(c);
+  const incHtml = incs.length ? `<div class="${incNew(c).length?"alert":""}" style="display:flex;flex-direction:column;gap:6px"><b>Problèmes signalés par le conducteur</b><ul style="margin:0;padding-left:18px">${incs.map(i=>`<li>${esc(i.heure||"")}${i.le?" ("+esc(frDate(String(i.le).slice(0,10),{day:"numeric",month:"short"}))+")":""} · <b style="color:inherit">${esc(INC[i.type]||"Autre")}</b>${i.commentaire?" — "+esc(i.commentaire):""}${i.path?` · <button type="button" class="linkbtn" data-doc="${esc(i.path)}">Voir la photo</button>`:""}${i.vu?` <span class="muted">(traité)</span>`:""}</li>`).join("")}</ul>${incNew(c).length?`<button type="button" class="btn btn-ghost btn-sm" data-act="incvu" style="align-self:flex-start">Marquer comme traité</button>`:""}</div>` : "";
+  const sigHtml = c.signataire ? `<div><b>Livraison signée par :</b> ${esc(c.signataire)}</div>` : "";
   return `<h2>${opts.title||"Course"}</h2>
   ${opts.note?`<div class="banner">${opts.note}</div>`:""}
   <form id="cForm" style="display:flex;flex-direction:column;gap:14px">
@@ -401,6 +425,7 @@ function courseForm(c,opts={}){
     <label class="fld">Livré<input type="time" id="f_livre" value="${esc(c.livre||"")}"></label>
     <label class="fld wide">Réserves à la livraison<textarea id="f_reserve" placeholder="Vide = sans réserve">${esc(c.reserve||"")}</textarea></label></fieldset>`}
   <fieldset><legend>Consignes</legend>${grp("i")}</fieldset>
+  ${incHtml}${sigHtml}
   ${docs?`<div><b>Documents</b><ul style="margin:6px 0 0">${docs}</ul></div>`:""}
   <div class="row-btns" id="formBtns">
     ${opts.canDelete?`<button type="button" class="btn btn-danger" data-act="askdel" style="margin-right:auto">Supprimer</button>`:""}
@@ -420,8 +445,9 @@ function readForm(base){
   return o;
 }
 function openModal(html){ $("#modal").innerHTML=`<div class="modal-bg" id="mbg"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
+  if($("#modal [data-lock]")) return; // écrans du conducteur : pas de clavier qui s'ouvre tout seul
   const first=$("#modal input, #modal select, #modal button"); first && first.focus(); }
-function closeModal(){ $("#modal").innerHTML=""; openId=null; }
+function closeModal(){ $("#modal").innerHTML=""; openId=null; S.doneFor=null; S.sign=null; }
 let openId=null;
 function openCourse(id){
   const c=S.courses.find(x=>x.id===id); if(!c) return; openId=id;
@@ -525,23 +551,100 @@ function vDriver(){
   const logo = MODE==="chauffeur" ? `<img src="icon-192.png" alt="Dream Chauffeur" style="width:38px;border-radius:9px">` : `<img src="../logo-blanc.png" alt="Tonton Business" style="width:38px">`;
   const tip = staff ? "" : installTip();
   if(!me) return `<div class="drv"><div class="drv-head"><h1>Vue conducteur</h1>${staff?`<p style="margin:0;color:var(--side-muted)">Choisissez un conducteur pour voir son écran.</p>${sel}`:`<p style="margin:0">Votre fiche conducteur est introuvable. Contactez votre exploitation.</p>`}</div>${back}</div>`;
-  const all=S.courses.filter(c=>c.conducteurId===me.id && c.enlDate===day && c.statut!=="annulee").sort((a,b)=>(toMin(a.enlHeure)||0)-(toMin(b.enlHeure)||0));
-  const vis=all.filter(c=>["envoyee","en_cours","terminee"].includes(c.statut));
-  const hidden=all.length-vis.length;
+  const vis=myDay(me.id,day);
+  const hidden=S.courses.filter(c=>c.conducteurId===me.id && c.enlDate===day && (c.statut==="planifiee"||c.statut==="a_planifier")).length;
   const curId=(vis.find(c=>c.statut==="en_cours")||vis.find(c=>c.statut==="envoyee")||{}).id;
-  const jobs=vis.map((c,i)=>jobHtml(c,i+1,c.id===curId)).join("");
+  const nDone=vis.filter(c=>c.statut==="terminee").length, allDone=vis.length>0 && nDone===vis.length;
+  const jobs=vis.map((c,i)=> c.statut==="terminee" && !S.openJobs.has(c.id) ? jobLine(c,i+1) : jobHtml(c,i+1,c.id===curId)).join("");
   const veh = camName(me.camionId) ? camName(me.camionId)+(isTracteur(me.camionId)&&remName(camById(me.camionId)?.remorqueId)?" + "+remName(camById(me.camionId).remorqueId):"") : "";
+  const prog = vis.length ? `<div class="prog" role="img" aria-label="${nDone} course${nDone>1?"s":""} sur ${vis.length} terminée${nDone>1?"s":""}"><div class="prog-bar"><span style="width:${Math.round(nDone/vis.length*100)}%"></span></div><span>${nDone} sur ${vis.length} terminée${nDone>1?"s":""}</span></div>` : "";
   return `<div class="drv"><div class="drv-head"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h1>Bonjour ${esc((me.nom||"").split(" ")[0])}</h1>${logo}</div>
     <span style="color:var(--side-muted)">${esc(frDate(day,{weekday:"long",day:"numeric",month:"long"}))}${veh?" · "+esc(veh):""}</span>
     <div class="seg" role="group" aria-label="Jour" style="align-self:flex-start"><button type="button" class="${S.drvDay==="today"?"on":""}" data-dday="today">Aujourd'hui</button><button type="button" class="${S.drvDay==="tomorrow"?"on":""}" data-dday="tomorrow">Demain</button></div>
+    ${prog}
     ${sel}</div>
     ${tip}
+    ${allDone && S.drvDay==="today" ? `<div class="job">${dayRecapHtml(me.id)}</div>` : ""}
     ${vis.length?jobs:`<div class="job"><b>Aucune course envoyée${S.drvDay==="today"?" pour aujourd'hui":" pour demain"}.</b><span class="muted">${staff&&hidden?`${hidden} course(s) prévue(s) mais pas encore envoyée(s).`:"Le planning apparaîtra ici dès que l'exploitation l'aura envoyé."}</span></div>`}
     <p class="muted" style="text-align:center;font-size:12px;margin:0">Chaque bouton envoie l'heure réelle à l'exploitation.</p>${back}</div>`;
 }
+/* course terminée repliée sur une ligne */
+function jobLine(c,n){
+  const chips=(c.reserve?`<span class="chip" style="border-color:var(--danger);color:var(--danger)">Réserve</span>`:"")+(hasBL(c)?"":`<span class="chip" style="border-color:var(--accent);color:var(--accent-ink)">BL à envoyer</span>`);
+  return `<button type="button" class="jobline" id="job-${esc(c.id)}" data-drv="toggle" data-id="${esc(c.id)}" aria-expanded="false"><span class="dot ok" aria-hidden="true">✓</span><span class="jl-main"><b>${n} · ${esc(c.donneur||"Course")}</b><span class="muted">${esc(c.livVille||"")}${c.livre?" · livré "+esc(c.livre):""}</span>${chips?`<span class="subs">${chips}</span>`:""}</span><span class="jl-chev" aria-hidden="true">Voir</span></button>`;
+}
+/* récapitulatif quand toutes les courses du jour sont livrées */
+function dayRecapHtml(condId){
+  const t=todayIso(), L=myDay(condId,t), T=myDay(condId,addDays(t,1)).filter(c=>c.statut!=="terminee");
+  const res=L.filter(c=>c.reserve).length, bl=L.filter(hasBL).length, sig=L.filter(c=>c.signataire).length;
+  const stat=(v,l)=>`<span class="recap-i"><b>${v}</b>${l}</span>`;
+  return `<div class="dayhead"><span class="dot ok" aria-hidden="true">✓</span><b>Journée terminée, bravo !</b></div>
+    <div class="recap">${stat(L.length,L.length>1?"courses livrées":"course livrée")}${stat(res,res>1?"réserves":"réserve")}${stat(bl+"/"+L.length,"BL envoyés")}${packOn()?stat(sig+"/"+L.length,"signatures"):""}</div>
+    ${bl<L.length?`<div class="banner"><span><b>Il manque ${L.length-bl} photo${L.length-bl>1?"s":""} de BL / CMR.</b> Ouvre la course marquée « BL à envoyer » et prends la photo.</span></div>`:""}
+    ${T.length?`<div><b>Demain : ${T.length} course${T.length>1?"s":""}</b><div class="muted">Premier enlèvement${T[0].enlHeure?" à "+esc(T[0].enlHeure):""}${T[0].enlVille?" · "+esc(T[0].enlVille):""}${T[0].donneur?" ("+esc(T[0].donneur)+")":""}</div></div><button type="button" class="btn btn-navy" data-dday="tomorrow">Voir le programme de demain</button>`
+      :`<span class="muted">Le programme de demain apparaîtra ici dès que l'exploitation l'aura envoyé.</span>`}`;
+}
+/* écran affiché juste après « Livré » : BL, puis prochaine course ou fin de journée */
+function showDone(id){
+  const c=S.courses.find(x=>x.id===id); if(!c) return;
+  const L=myDay(c.conducteurId,todayIso());
+  const next=L.find(x=>x.statut==="en_cours")||L.find(x=>x.statut==="envoyee");
+  const blBlock = hasBL(c) ? `<div class="okline">✓ Photo du BL / CMR envoyée</div>`
+    : `<div class="banner" style="flex-direction:column;align-items:stretch"><b>Il manque la photo du BL / CMR</b><span>Prends-la maintenant : l'exploitation en a besoin pour facturer.</span><label class="btn btn-accent big" style="position:relative">Prendre la photo du BL / CMR<input type="file" accept="image/*,application/pdf" class="hidden-file" data-bl="${esc(id)}"></label></div>`;
+  const suite = next ? `<div class="nextcard"><span class="eyebrow">Prochaine course</span><b style="font-size:17px">${esc(next.donneur||"Course")}</b>
+      <div><b>Enlèvement${next.enlHeure?" · "+esc(next.enlHeure):""}</b><div>${esc(next.enlNom||"")}</div><div class="muted">${esc([next.enlAdresse,next.enlCp,next.enlVille].filter(Boolean).join(" "))}</div></div>
+      <div><b>Livraison${next.livHeure?" · "+esc(next.livHeure):""}</b><div class="muted">${esc([next.livNom,next.livVille].filter(Boolean).join(" · "))}</div></div>
+      <a class="btn btn-navy big" href="${next.chargeEnl?gmaps(next.livAdresse,next.livCp,next.livVille):gmaps(next.enlAdresse,next.enlCp,next.enlVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a></div>
+      <button type="button" class="btn btn-ghost" data-drv="next" data-id="${esc(next.id)}">Voir le détail de la course</button>`
+    : `<div class="nextcard">${dayRecapHtml(c.conducteurId)}</div><button type="button" class="btn btn-ghost" data-act="close">Fermer</button>`;
+  openModal(`<div data-lock="1" class="drvmodal"><div class="dayhead"><span class="dot ok" aria-hidden="true">✓</span><div><h2>Course terminée</h2><span class="muted">${esc(c.donneur||"")}${c.livre?" · livré à "+esc(c.livre):""}${c.signataire?" · signé par "+esc(c.signataire):""}</span></div></div>
+    ${c.reserve?`<div class="alert"><b>Réserve :</b> ${esc(c.reserve)}</div>`:""}${blBlock}${suite}</div>`);
+  S.doneFor=id;
+}
+/* signature du destinataire avec le doigt */
+function openSign(id,reserve){
+  const c=S.courses.find(x=>x.id===id); if(!c) return;
+  openModal(`<div data-lock="keep" class="drvmodal"><h2>Signature du destinataire</h2>
+    <span class="muted">${esc(c.livNom||c.donneur||"")} — passe le téléphone à la personne qui réceptionne la marchandise.</span>
+    ${reserve?`<div class="alert"><b>Réserve notée :</b> ${esc(reserve)}</div>`:""}
+    <label class="fld">Nom de la personne qui signe<input type="text" id="sigNom" autocomplete="off" maxlength="80"></label>
+    <div class="sigwrap"><canvas id="sigPad" aria-label="Zone de signature"></canvas><span class="sighint" id="sigHint">Signer ici avec le doigt</span></div>
+    <button type="button" class="linkbtn" data-drv="sigClear" style="align-self:flex-start">Effacer la signature</button>
+    <button type="button" class="btn btn-accent big" data-drv="sigOk" data-id="${esc(id)}">Valider la livraison</button>
+    <div class="two"><button type="button" class="btn btn-ghost" data-drv="sigCancel">Retour</button><button type="button" class="btn btn-ghost" data-drv="sigSkip" data-id="${esc(id)}">Personne pour signer</button></div></div>`);
+  S.sign={id,reserve,drawn:false};
+  const cv=$("#sigPad"); if(!cv) return;
+  const dpr=Math.min(window.devicePixelRatio||1,2), r=cv.getBoundingClientRect();
+  cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr);
+  const x=cv.getContext("2d"); x.scale(dpr,dpr);
+  // la signature est une image jointe à la course : toujours encre foncée sur fond blanc
+  const blank=()=>{ x.fillStyle="#FFFFFF"; x.fillRect(0,0,r.width,r.height); };
+  blank(); x.strokeStyle="#14202E"; x.lineWidth=2.4; x.lineCap="round"; x.lineJoin="round";
+  let on=false; const pos=e=>{ const b=cv.getBoundingClientRect(); return [e.clientX-b.left,e.clientY-b.top]; };
+  cv.addEventListener("pointerdown",e=>{ e.preventDefault(); on=true; try{cv.setPointerCapture(e.pointerId);}catch(_){ }
+    const [a,b]=pos(e); x.beginPath(); x.moveTo(a,b); x.lineTo(a+0.1,b+0.1); x.stroke(); if(S.sign) S.sign.drawn=true; const h=$("#sigHint"); if(h) h.hidden=true; });
+  cv.addEventListener("pointermove",e=>{ if(!on) return; e.preventDefault(); const [a,b]=pos(e); x.lineTo(a,b); x.stroke(); });
+  ["pointerup","pointercancel"].forEach(t=>cv.addEventListener(t,()=>{ on=false; }));
+  S.sign.clear=()=>{ blank(); S.sign.drawn=false; const h=$("#sigHint"); if(h) h.hidden=false; };
+}
+/* signalement d'un problème à l'exploitation */
+function openIncident(id){
+  const c=S.courses.find(x=>x.id===id); if(!c) return; S.incType=null;
+  openModal(`<div data-lock="1" class="drvmodal"><h2>Signaler un problème</h2>
+    <span class="muted">${esc(c.donneur||"Course")} — l'exploitation est prévenue tout de suite.</span>
+    <div class="inctypes" role="radiogroup" aria-label="Type de problème">${Object.entries(INC).map(([k,l])=>`<button type="button" role="radio" aria-checked="false" class="btn btn-ghost" data-inctype="${k}">${l}</button>`).join("")}</div>
+    <label class="fld">Précisions (facultatif)<textarea id="incTxt" maxlength="500" placeholder="Exemple : 2 h d'attente au quai 4"></textarea></label>
+    <label class="btn btn-ghost" style="position:relative"><span id="incPhotoLbl">Ajouter une photo (facultatif)</span><input type="file" accept="image/*" class="hidden-file" id="incPhoto"></label>
+    <div class="two"><button type="button" class="btn btn-ghost" data-act="close">Annuler</button><button type="button" class="btn btn-accent" data-drv="incOk" data-id="${esc(id)}">Envoyer</button></div></div>`);
+}
+async function deliver(id,reserve){
+  const {error}=await sb.rpc("etape_course",{p_course:id,p_etape:"livre",p_reserve:reserve||null});
+  if(error){ toast(errMsg(error)); return false; }
+  S.reserveFor=null; await loadData(); showDone(id); return true;
+}
 function jobHtml(c,n,cur){
   const st=c.statut; const done=st==="terminee"||st==="annulee"; const id=esc(c.id);
-  const maps=(a,cp,v)=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([a,cp,v].filter(Boolean).join(" "))}`;
+  const maps=gmaps;
   // prochaine étape à valider : chaque bouton est placé directement sous l'enlèvement ou la livraison concernés
   const next = done ? null : !c.arriveeEnl ? "arrivee_enl" : !c.chargeEnl ? "charge_enl" : !c.arriveeLiv ? "arrivee_liv" : "livre";
   const enlCur = next==="arrivee_enl"||next==="charge_enl", livCur = next==="arrivee_liv"||next==="livre";
@@ -564,28 +667,69 @@ function jobHtml(c,n,cur){
   const step=(ok,isCur,which,title,heure,lines,subs,btn)=>`<div class="step ${isCur?"now":""}">${dot(ok,isCur,which)}<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px"><b>${title}${heure?" · "+esc(heure):""}</b>${lines}<div class="subs">${subs}</div>${btn}</div></div>`;
   const m=[c.palettes&&c.palettes+" palettes",c.colis&&c.colis+" colis",c.poids&&Number(c.poids).toLocaleString("fr-FR")+" kg",c.metres&&c.metres+" m"].filter(Boolean).join(" · ");
   const bl=(c.docs||[]).filter(d=>d.type==="bl").length;
-  return `<article class="job ${cur?"cur":""}">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:16px">${n} · ${esc(c.donneur||"")}</b><span class="chip st-${esc(st)}">${esc(STATUTS[st]?.l||"")}</span></div>
-    ${step(!!c.chargeEnl,enlCur,"enl","Enlèvement",c.enlHeure,`<div>${esc(c.enlNom||"")}</div><div>${esc(c.enlAdresse||"")} ${esc(c.enlCp||"")} ${esc(c.enlVille||"")}</div><a href="${maps(c.enlAdresse,c.enlCp,c.enlVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,sub("Arrivé",c.arriveeEnl)+sub("Chargé",c.chargeEnl),enlBtn)}
-    ${step(!!c.livre,livCur,"liv","Livraison",c.livHeure,`<div>${esc(c.livNom||"")}</div><div>${esc(c.livAdresse||"")} ${esc(c.livCp||"")} ${esc(c.livVille||"")}</div><a href="${maps(c.livAdresse,c.livCp,c.livVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,sub("Arrivé",c.arriveeLiv)+sub("Livré",c.livre),livBtn)}
+  const autreJour = c.enlDate && c.livDate && c.livDate!==c.enlDate;
+  const jour = d => autreJour && d ? " · "+esc(frDate(d,{weekday:"short",day:"numeric",month:"short"})) : "";
+  const incs = incOf(c).map(i=>`<div class="alert"><b>Signalé${i.heure?" à "+esc(i.heure):""} · ${esc(INC[i.type]||"Autre")}</b>${i.commentaire?" — "+esc(i.commentaire):""}</div>`).join("");
+  return `<article class="job ${cur?"cur":""}" id="job-${id}">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:16px">${n} · ${esc(c.donneur||"")}</b><span style="display:flex;align-items:center;gap:8px">${st==="terminee"?`<button type="button" class="linkbtn" data-drv="toggle" data-id="${id}" aria-expanded="true">Replier</button>`:""}<span class="chip st-${esc(st)}">${esc(STATUTS[st]?.l||"")}</span></span></div>
+    ${step(!!c.chargeEnl,enlCur,"enl","Enlèvement"+jour(c.enlDate),c.enlHeure,`<div>${esc(c.enlNom||"")}</div><div>${esc(c.enlAdresse||"")} ${esc(c.enlCp||"")} ${esc(c.enlVille||"")}</div><a href="${maps(c.enlAdresse,c.enlCp,c.enlVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,sub("Arrivé",c.arriveeEnl)+sub("Chargé",c.chargeEnl),enlBtn)}
+    ${step(!!c.livre,livCur,"liv","Livraison"+jour(c.livDate),c.livHeure,`<div>${esc(c.livNom||"")}</div><div>${esc(c.livAdresse||"")} ${esc(c.livCp||"")} ${esc(c.livVille||"")}</div><a href="${maps(c.livAdresse,c.livCp,c.livVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,sub("Arrivé",c.arriveeLiv)+sub("Livré",c.livre)+(c.signataire?`<span class="sub ok">✓ Signé par ${esc(c.signataire)}</span>`:""),livBtn)}
     ${vehLabel(c)?`<div style="font-size:13px"><b>Véhicule :</b> ${esc(vehLabel(c))}</div>`:""}
     ${m||c.ref?`<div class="muted" style="font-size:13px">${esc(m)}${c.ref?" · Réf. "+esc(c.ref):""}</div>`:""}
     ${c.instructions?`<div style="background:var(--accent-soft);border-radius:8px;padding:8px 10px;font-size:13px"><b>Consignes :</b> ${esc(c.instructions)}</div>`:""}
     ${c.contact?`<div style="font-size:13px">Contact : <span style="user-select:all">${esc(c.contact)}</span></div>`:""}
     ${c.reserve?`<div class="alert"><b>Réserve :</b> ${esc(c.reserve)}</div>`:""}
-    <label class="btn btn-ghost" style="position:relative">Photo BL / CMR${bl?` (${bl})`:""}<input type="file" accept="image/*,application/pdf" class="hidden-file" data-bl="${id}"></label>
+    ${incs}
+    <div class="${packOn()&&st!=="annulee"?"two":""}"><label class="btn btn-ghost" style="position:relative">Photo BL / CMR${bl?` (${bl})`:""}<input type="file" accept="image/*,application/pdf" class="hidden-file" data-bl="${id}"></label>${packOn()&&st!=="annulee"?`<button type="button" class="btn btn-ghost" data-drv="incident" data-id="${id}">Signaler un problème</button>`:""}</div>
     ${c.arriveeEnl&&!done?`<button type="button" class="btn btn-ghost btn-sm" data-drv="annuler" data-id="${id}" style="align-self:center">Annuler la dernière étape</button>`:""}
   </article>`;
 }
 async function drvAction(act,id,el){
   if(act==="pasencore"){ toast("Valide d'abord l'enlèvement : arrivé, puis chargé."); return; }
+  if(act==="toggle"){ S.openJobs.has(id)?S.openJobs.delete(id):S.openJobs.add(id); render(); return; }
+  if(act==="incident"){ openIncident(id); return; }
+  if(act==="next"){ closeModal(); S.drvDay="today"; render(); const j=document.getElementById("job-"+id); j&&j.scrollIntoView({block:"start"}); return; }
   if(act==="reserve"){ S.reserveFor=id; render(); const r=$("#resTxt"); r&&r.focus(); return; }
   if(act==="resCancel"){ S.reserveFor=null; render(); return; }
-  let etape=act, reserve=null;
-  if(act==="resOk"){ reserve=($("#resTxt")?.value||"").trim(); if(!reserve){ toast("Décrivez la réserve avant de valider."); return; } etape="livre"; S.reserveFor=null; }
-  const {error}=await sb.rpc("etape_course",{p_course:id,p_etape:etape,p_reserve:reserve});
+  if(act==="sigClear"){ S.sign&&S.sign.clear&&S.sign.clear(); return; }
+  if(act==="sigCancel"){ closeModal(); return; }
+  if(act==="sigSkip"){ const rv=S.sign?S.sign.reserve:null; closeModal(); await deliver(id,rv); return; }
+  if(act==="sigOk"){
+    const nom=($("#sigNom")?.value||"").trim();
+    if(!nom){ toast("Indique le nom de la personne qui signe."); $("#sigNom")?.focus(); return; }
+    if(!S.sign||!S.sign.drawn){ toast("La signature est vide : fais signer dans le cadre."); return; }
+    const rv=S.sign.reserve, lbl=el.textContent; el.disabled=true; el.textContent="Envoi…";
+    const fail=m=>{ toast(m); el.disabled=false; el.textContent=lbl; };
+    const blob=await new Promise(r=>$("#sigPad").toBlob(r,"image/png"));
+    if(!blob){ fail("La signature n'a pas pu être enregistrée. Réessaie."); return; }
+    const path=`${EID()}/signatures/${id}-${Date.now()}.png`;
+    const up=await sb.storage.from("documents").upload(path,blob,{contentType:"image/png"});
+    if(up.error){ fail("La signature n'a pas pu être envoyée. Vérifie le réseau et réessaie."); return; }
+    const sg=await sb.rpc("signer_livraison",{p_course:id,p_nom:nom,p_path:path});
+    if(sg.error){ fail(errMsg(sg.error)); return; }
+    closeModal(); await deliver(id,rv); return;
+  }
+  if(act==="incOk"){
+    if(!S.incType){ toast("Choisis d'abord le type de problème."); return; }
+    const lbl=el.textContent; el.disabled=true; el.textContent="Envoi…";
+    const fail=m=>{ toast(m); el.disabled=false; el.textContent=lbl; };
+    let path=null; const f=$("#incPhoto")?.files?.[0];
+    if(f){ if(f.size>9*1024*1024){ fail("Photo trop lourde (9 Mo maximum)."); return; }
+      const ext=(f.name.match(/\.\w+$/)||[".jpg"])[0].toLowerCase(); path=`${EID()}/incidents/${id}-${Date.now()}${ext}`;
+      const up=await sb.storage.from("documents").upload(path,f,{contentType:f.type||"image/jpeg"});
+      if(up.error){ fail("La photo n'a pas pu être envoyée. Réessaie, ou envoie sans photo."); return; } }
+    const {error}=await sb.rpc("signaler_incident",{p_course:id,p_type:S.incType,p_commentaire:$("#incTxt")?.value||"",p_path:path});
+    if(error){ fail(errMsg(error)); return; }
+    closeModal(); toast("Problème signalé à l'exploitation"); scheduleReload(); return;
+  }
+  if(act==="livre"||act==="resOk"){
+    let reserve=null;
+    if(act==="resOk"){ reserve=($("#resTxt")?.value||"").trim(); if(!reserve){ toast("Décrivez la réserve avant de valider."); return; } }
+    if(packOn()) openSign(id,reserve); else await deliver(id,reserve);
+    return;
+  }
+  const {error}=await sb.rpc("etape_course",{p_course:id,p_etape:act,p_reserve:null});
   if(error){ toast(errMsg(error)); return; }
-  if(etape==="livre") toast(reserve?"Livraison avec réserves enregistrée":"Livraison enregistrée");
   scheduleReload();
 }
 async function uploadBL(id,file){
@@ -597,7 +741,7 @@ async function uploadBL(id,file){
   if(up.error){ toast("La photo n'a pas pu être envoyée. Réessayez."); return; }
   const {error}=await sb.rpc("ajouter_document",{p_course:id,p_path:path,p_nom:file.name||"photo",p_type:"bl"});
   if(error){ toast(errMsg(error)); return; }
-  toast("Photo du BL / CMR envoyée"); scheduleReload();
+  toast("Photo du BL / CMR envoyée"); const again=S.doneFor===id; await loadData(); if(again) showDone(id);
 }
 
 /* ---------- INDICATEURS ---------- */
@@ -723,8 +867,8 @@ async function showAcces(condId, regen){
 
 /* ---------- clics globaux ---------- */
 document.addEventListener("click",async e=>{
-  if(e.target.id==="mbg"){ closeModal(); return; }
-  const el=e.target.closest("[data-act],[data-open],[data-day],[data-mode],[data-repos],[data-fst],[data-fper],[data-drv],[data-dday],[data-impedit],[data-impdel],[data-savecond],[data-delcond],[data-savecam],[data-delcam],[data-saverem],[data-delrem],[data-auth],[data-acces],[data-regen],[data-unlink],[data-copy],[data-doc]");
+  if(e.target.id==="mbg"){ if(!$("#modal [data-lock='keep']")) closeModal(); return; }
+  const el=e.target.closest("[data-act],[data-open],[data-day],[data-mode],[data-repos],[data-fst],[data-fper],[data-drv],[data-dday],[data-impedit],[data-impdel],[data-savecond],[data-delcond],[data-savecam],[data-delcam],[data-saverem],[data-delrem],[data-auth],[data-acces],[data-regen],[data-unlink],[data-copy],[data-doc],[data-inctype]");
   if(!el) return;
   const d=el.dataset;
   if(d.auth){ S.authMode=d.auth; S.authErr=""; render(); return; }
@@ -762,13 +906,16 @@ document.addEventListener("click",async e=>{
   else if(d.fst){ S.fStatut=d.fst; if(S.view!=="courses") location.hash="courses"; else render(); }
   else if(d.fper){ S.fPeriode=d.fper; render(); }
   else if(d.drv){ drvAction(d.drv,d.id,el); }
-  else if(d.dday){ S.drvDay=d.dday; render(); }
+  else if(d.dday){ S.drvDay=d.dday; if($("#modal").innerHTML) closeModal(); render(); window.scrollTo(0,0); }
+  else if(d.inctype){ S.incType=d.inctype; document.querySelectorAll("[data-inctype]").forEach(b=>{ const on=b.dataset.inctype===S.incType; b.setAttribute("aria-checked",on?"true":"false"); b.classList.toggle("btn-navy",on); b.classList.toggle("btn-ghost",!on); }); }
+  else if(d.act==="incvu"){ const c=S.courses.find(x=>x.id===openId); if(!c) return; if(await saveCourse(c.id,{incidents:incOf(c).map(i=>Object.assign({},i,{vu:true}))})){ closeModal(); toast("Problème marqué comme traité"); } }
   else if(d.impedit!==undefined){ editImport(Number(d.impedit)); }
   else if(d.impdel!==undefined){ S.importList.splice(Number(d.impdel),1); showImport(); }
 });
 document.addEventListener("change",e=>{
   if(e.target.id==="f_camionId"){ const w=$("#remWrap"); if(w){ w.hidden=!isTracteur(e.target.value); const cam=camById(e.target.value); const rs=$("#f_remorqueId"); if(rs && !rs.value && cam?.remorqueId) rs.value=cam.remorqueId; } }
   if(e.target.id==="meSel"){ S.me=e.target.value; store.set("tp_me",S.me); render(); }
+  if(e.target.id==="incPhoto"){ const l=$("#incPhotoLbl"); if(l) l.textContent = e.target.files&&e.target.files[0] ? "Photo ajoutée ✓ (toucher pour changer)" : "Ajouter une photo (facultatif)"; }
   if(e.target.dataset && e.target.dataset.bl){ const f=e.target.files&&e.target.files[0]; if(f) uploadBL(e.target.dataset.bl,f); }
 });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("#modal").innerHTML) closeModal(); });
