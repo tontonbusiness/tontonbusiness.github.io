@@ -63,7 +63,7 @@ T.nav = () => {
     sub("en_cours","En cours",cnt("en_cours"))+sub("terminee","Terminés",cnt("terminee"))+L("conducteur","Vue conducteur")+
     `<span class="grp">FACTURATION</span>`+L("devis","Devis")+L("factures","Facturation de ventes")+
     subv("afacturer","Transports à facturer",F.ready?aFact().length:0,true)+subv("factures","Factures",nb("facture"))+subv("relances","Relances clients",F.pieces.filter(enRetard).length,true)+subv("avoirs","Avoirs",nb("avoir"))+
-    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("activite","Activité chauffeurs")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+subv("echvehicules","Contrôles véhicules",echCompte("v"),true)+subv("echchauffeurs","Documents chauffeurs",echCompte("c"),true)+L("reglages","Paramètres");
+    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("activite","Activité chauffeurs")+L("soustraitants","Sous-traitants")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+subv("echvehicules","Contrôles véhicules",echCompte("v"),true)+subv("echchauffeurs","Documents chauffeurs",echCompte("c"),true)+L("reglages","Paramètres");
 };
 
 /* ---------- À FACTURER ---------- */
@@ -109,13 +109,18 @@ const totalCouts = c => r2(coutsDe(c).reduce((t,l)=>t+(Number(l.montant)||0),0))
 function coutTot(){ const el=$("#f_prix"); const c=S.courses.find(x=>x.id===CT.id)||{}; const prix=el&&el.value.trim()!=="" ? Number(el.value.replace(",","."))||0 : Number(c.prix)||0;
   const tot=r2(CT.lignes.reduce((t,l)=>t+(Number(l.montant)||0),0)), marge=r2(prix-tot);
   return `<span>Prix de vente HT</span><span>${money(prix)}</span><span>Coûts d'achat HT</span><span>${money(tot)}</span><b class="big" style="${marge<0?"color:var(--danger)":""}">Marge</b><b class="big" style="${marge<0?"color:var(--danger)":""}">${money(marge)}${prix>0?` · ${(marge/prix*100).toLocaleString("fr-FR",{maximumFractionDigits:1})} %`:""}</b>`; }
-function coutInner(){ return `<div class="tbl-wrap"><table class="lines" style="min-width:0"><thead><tr><th>Coût d'achat</th><th style="width:150px">Montant HT</th><th></th></tr></thead><tbody>
-    ${CT.lignes.length?CT.lignes.map((l,i)=>`<tr><td><input class="fin" list="coutsListe" data-ct="libelle" data-i="${i}" value="${esc(l.libelle||"")}" placeholder="Sous-traitance, péage, frais…" aria-label="Nature du coût"></td><td><input class="fin num" type="number" step="0.01" min="0" data-ct="montant" data-i="${i}" value="${esc(l.montant??"")}" aria-label="Montant hors taxes"></td><td><button type="button" class="linkbtn" data-f="ctdel" data-i="${i}">Retirer</button></td></tr>`).join("")
-      :`<tr><td colspan="3"><span class="muted">Aucun coût d'achat saisi pour ce transport.</span></td></tr>`}</tbody></table></div>
-    <datalist id="coutsListe"><option value="Sous-traitance / affrètement"><option value="Péages"><option value="Carburant"><option value="Frais de route"><option value="Manutention"><option value="Immobilisation"><option value="Autre"></datalist>
+const CT_TYPES = ["Sous-traitance / affrètement","Manutention","Attente","Hayon","Péages","Carburant","Frais de route","Immobilisation","Autre"];
+const sousTraitants = () => F.clients.filter(c=>c.sous_traitant && c.actif!==false);
+function coutInner(){ const subs=sousTraitants();
+  return `<div class="tbl-wrap"><table class="lines" style="min-width:560px"><thead><tr><th>Coût d'achat</th><th>Sous-traitant</th><th style="width:130px">Montant HT</th><th></th></tr></thead><tbody>
+    ${CT.lignes.length?CT.lignes.map((l,i)=>`<tr><td><select class="fin" data-ct="type" data-i="${i}" aria-label="Nature du coût">${CT_TYPES.map(t=>`<option ${l.type===t?"selected":""}>${t}</option>`).join("")}</select>${l.type==="Autre"?`<input class="fin" style="margin-top:4px" data-ct="texte" data-i="${i}" value="${esc(l.texte||"")}" placeholder="Précisez le coût" aria-label="Précision du coût">`:""}</td>
+      <td>${l.stnom!==undefined?`<input class="fin" data-ct="stnom" data-i="${i}" value="${esc(l.stnom)}" placeholder="Nom du nouveau sous-traitant" aria-label="Nom du nouveau sous-traitant">`
+        :`<select class="fin" data-ct="st" data-i="${i}" aria-label="Sous-traitant"><option value="">— Aucun (coût interne) —</option>${subs.map(x=>`<option value="${esc(x.id)}" ${l.st===x.id?"selected":""}>${esc(x.nom)}</option>`).join("")}${l.st&&!subs.some(x=>x.id===l.st)?`<option value="${esc(l.st)}" selected>${esc(clientById(l.st)?.nom||"Sous-traitant archivé")}</option>`:""}<option value="__new">+ Nouveau sous-traitant…</option></select>`}</td>
+      <td><input class="fin num" type="number" step="0.01" min="0" data-ct="montant" data-i="${i}" value="${esc(l.montant??"")}" aria-label="Montant hors taxes"></td><td><button type="button" class="linkbtn" data-f="ctdel" data-i="${i}">Retirer</button></td></tr>`).join("")
+      :`<tr><td colspan="4"><span class="muted">Aucun coût d'achat saisi pour ce transport.</span></td></tr>`}</tbody></table></div>
     <div class="bar"><button type="button" class="btn btn-ghost btn-sm" data-f="ctadd">+ Ajouter un coût</button><button type="button" class="btn btn-navy btn-sm" data-f="ctsave">Enregistrer les coûts</button><span style="flex:1"></span><div class="tot" id="ctTot">${coutTot()}</div></div>`; }
 const coutBloc = c => { if(!("couts" in c) || c.statut==="annulee") return "";
-  CT.id=c.id; CT.lignes=JSON.parse(JSON.stringify(coutsDe(c)));
+  CT.id=c.id; CT.lignes=coutsDe(c).map(l=>({ type:CT_TYPES.includes(l.libelle)?l.libelle:"Autre", texte:CT_TYPES.includes(l.libelle)?"":(l.libelle||""), montant:l.montant, st:l.st||"" }));
   return `<div class="pan" style="background:var(--surface-2)"><h2>Prix et coûts d'achat</h2><div id="ctBox" style="display:flex;flex-direction:column;gap:10px">${coutInner()}</div></div>`; };
 const factBloc = c => {
   if(!F.ready || c.statut==="annulee") return "";
@@ -258,12 +263,12 @@ const A = { cond:"", mode:"semaine", ref:todayIso() };
 const mn = h => h ? Number(h.slice(0,2))*60+Number(h.slice(3,5)) : null;
 const duree = m => m==null ? "—" : (m>=60 ? Math.floor(m/60)+" h "+String(m%60).padStart(2,"0") : m+" min");
 const pad2 = n => String(n).padStart(2,"0");
-function actPeriode(){ const [y,m,d]=A.ref.split("-").map(Number);
-  if(A.mode==="jour") return { from:A.ref, to:A.ref, txt:frDate(A.ref,{weekday:"long",day:"numeric",month:"long",year:"numeric"}) };
-  if(A.mode==="mois"){ const last=new Date(y,m,0).getDate(); return { from:`${y}-${pad2(m)}-01`, to:`${y}-${pad2(m)}-${pad2(last)}`, txt:frDate(`${y}-${pad2(m)}-01`,{month:"long",year:"numeric"}) }; }
-  const wd=(new Date(y,m-1,d).getDay()+6)%7, from=T.addDays(A.ref,-wd), to=T.addDays(from,6);
+function actPeriode(o=A){ const [y,m,d]=o.ref.split("-").map(Number);
+  if(o.mode==="jour") return { from:o.ref, to:o.ref, txt:frDate(o.ref,{weekday:"long",day:"numeric",month:"long",year:"numeric"}) };
+  if(o.mode==="mois"){ const last=new Date(y,m,0).getDate(); return { from:`${y}-${pad2(m)}-01`, to:`${y}-${pad2(m)}-${pad2(last)}`, txt:frDate(`${y}-${pad2(m)}-01`,{month:"long",year:"numeric"}) }; }
+  const wd=(new Date(y,m-1,d).getDay()+6)%7, from=T.addDays(o.ref,-wd), to=T.addDays(from,6);
   return { from, to, txt:`Semaine du ${frDate(from,{day:"numeric",month:"long"})} au ${frDate(to,{day:"numeric",month:"long",year:"numeric"})}` }; }
-function actDecale(dir){ if(A.mode==="mois"){ const [y,m]=A.ref.split("-").map(Number); const x=new Date(y,m-1+dir,1); A.ref=`${x.getFullYear()}-${pad2(x.getMonth()+1)}-01`; } else A.ref=T.addDays(A.ref,dir*(A.mode==="jour"?1:7)); }
+function actDecale(dir,o=A){ if(o.mode==="mois"){ const [y,m]=o.ref.split("-").map(Number); const x=new Date(y,m-1+dir,1); o.ref=`${x.getFullYear()}-${pad2(x.getMonth()+1)}-01`; } else o.ref=T.addDays(o.ref,dir*(o.mode==="jour"?1:7)); }
 const TOL = 15; // minutes de tolérance avant de compter un retard
 function actStats(condId, from, to){
   const L=S.courses.filter(c=>c.conducteurId===condId && c.enlDate && c.enlDate>=from && c.enlDate<=to && c.statut!=="annulee").sort((a,b)=>a.enlDate.localeCompare(b.enlDate)||(mn(a.enlHeure)||0)-(mn(b.enlHeure)||0));
@@ -303,6 +308,42 @@ T.views.activite = () => {
      :`<div class="pan"><div class="empty">Aucune course pour ${esc(k.nom)} sur cette période.</div></div>`}
     <span class="muted" style="font-size:12px">Les heures sont celles validées par le chauffeur dans Dream Chauffeur. Ce relevé suit l'activité : il ne remplace pas le chronotachygraphe pour le temps de travail et de conduite.${kmActif()?" Les kilomètres sont ceux du trajet routier entre l'enlèvement et la livraison des courses terminées (hors approche et retour à vide).":""}</span>`; }
   return tete+`<div id="actBody" style="display:flex;flex-direction:column;gap:14px">${corps}</div>`;
+};
+
+/* ---------- SOUS-TRAITANTS : ce que chacun a fait, par jour, semaine ou mois ---------- */
+const B = { st:"", mode:"mois", ref:todayIso() };
+function stStats(stId, from, to){
+  const cs=S.courses.filter(c=>c.statut!=="annulee" && c.enlDate && c.enlDate>=from && c.enlDate<=to && coutsDe(c).some(l=>l.st===stId)).sort((a,b)=>a.enlDate.localeCompare(b.enlDate)||(mn(a.enlHeure)||0)-(mn(b.enlHeure)||0));
+  const types={}; let achat=0, vente=0, couts=0, km=0;
+  cs.forEach(c=>{ coutsDe(c).filter(l=>l.st===stId).forEach(l=>{ achat+=Number(l.montant)||0; types[l.libelle]=r2((types[l.libelle]||0)+(Number(l.montant)||0)); }); vente+=Number(c.prix)||0; couts+=totalCouts(c); km+=Number(c.km)||0; });
+  return { cs, types, achat:r2(achat), vente:r2(vente), marge:r2(vente-couts), km };
+}
+T.views.soustraitants = () => {
+  if(!F.ready) return off();
+  const P=actPeriode(B); const subs=F.clients.filter(c=>c.sous_traitant).sort((a,b)=>a.nom.localeCompare(b.nom)); const k=subs.find(c=>c.id===B.st);
+  const pc=(m,v)=>v>0?` · ${(m/v*100).toLocaleString("fr-FR",{maximumFractionDigits:1})} %`:"";
+  const orphelins=S.courses.filter(c=>c.statut!=="annulee" && c.enlDate && c.enlDate>=P.from && c.enlDate<=P.to && coutsDe(c).some(l=>l.libelle===CT_TYPES[0] && !l.st));
+  const tete=`<div class="bar"><h1>Sous-traitants</h1><button type="button" class="btn btn-ghost" data-f="stprint">Imprimer / PDF</button><button type="button" class="btn btn-accent" data-f="cnew" data-st="1">+ Nouveau sous-traitant</button></div>
+    <div class="bar"><select class="fin" id="stSel" style="width:auto;min-width:220px" aria-label="Sous-traitant"><option value="">Tous les sous-traitants (comparatif)</option>${subs.map(c=>`<option value="${esc(c.id)}" ${B.st===c.id?"selected":""}>${esc(c.nom)}</option>`).join("")}</select>
+      <div class="seg" role="group" aria-label="Période">${[["jour","Jour"],["semaine","Semaine"],["mois","Mois"]].map(([v,l])=>`<button type="button" class="${B.mode===v?"on":""}" data-f="stmode" data-v="${v}">${l}</button>`).join("")}</div>
+      <button type="button" class="btn btn-ghost btn-sm" data-f="stnav" data-v="-1" aria-label="Période précédente">‹</button><b style="min-width:0">${esc(P.txt)}</b><button type="button" class="btn btn-ghost btn-sm" data-f="stnav" data-v="1" aria-label="Période suivante">›</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-f="stnav" data-v="0">Aujourd'hui</button></div>
+    ${orphelins.length?`<div class="banner"><span><b>${orphelins.length} transport${orphelins.length>1?"s ont":" a"} un coût de sous-traitance sans sous-traitant nommé</b> sur cette période : ${orphelins.slice(0,4).map(c=>esc(c.donneur||"")+" du "+d2(c.enlDate)).join(", ")}${orphelins.length>4?"…":""}. Ouvrez le transport et choisissez le sous-traitant sur la ligne de coût.</span></div>`:""}`;
+  let corps;
+  if(!subs.length) corps=`<div class="pan"><div class="empty">Aucun sous-traitant pour l'instant. Ajoutez-en un ici, ou directement sur un coût d'achat dans la fiche d'un transport (« + Nouveau sous-traitant »).</div></div>`;
+  else if(!k){ const rows=subs.map(c=>({c,s:stStats(c.id,P.from,P.to)})); const tot=rows.reduce((t,r)=>({n:t.n+r.s.cs.length,a:t.a+r.s.achat}),{n:0,a:0});
+    corps=`<div class="kpis"><div class="kpi"><small>Transports sous-traités</small><b class="num">${tot.n}</b></div><div class="kpi"><small>Montant acheté HT</small><b class="num">${money(tot.a)}</b></div><div class="kpi"><small>Sous-traitants utilisés</small><b class="num">${rows.filter(r=>r.s.cs.length).length} / ${subs.length}</b></div></div>
+    <div class="pan"><h2>Comparatif — ${esc(P.txt)}</h2><div class="tbl-wrap"><table><thead><tr><th>Sous-traitant</th><th>Transports confiés</th><th style="text-align:right">Acheté HT</th><th style="text-align:right">Vendu HT</th><th style="text-align:right">Marge gardée</th><th style="text-align:right">Km</th></tr></thead><tbody>
+    ${rows.map(({c,s})=>`<tr class="click" tabindex="0" data-f="stpick" data-id="${esc(c.id)}"><td><b>${esc(c.nom)}</b>${c.actif===false?` <span class="muted">(archivé)</span>`:""}</td><td class="num">${s.cs.length}</td><td class="num" style="text-align:right">${money(s.achat)}</td><td class="num" style="text-align:right">${money(s.vente)}</td><td class="num" style="text-align:right${s.marge<0?";color:var(--danger);font-weight:700":""}">${s.cs.length?money(s.marge)+pc(s.marge,s.vente):"—"}</td><td class="num" style="text-align:right">${s.km?kmTxt(s.km):"—"}</td></tr>`).join("")}</tbody></table></div>
+    <span class="muted" style="font-size:12px">Cliquez sur un sous-traitant pour voir le détail. Marge gardée : prix de vente des transports confiés, moins tous leurs coûts d'achat.</span></div>`;
+  } else { const s=stStats(k.id,P.from,P.to);
+    corps=`<div class="kpis"><div class="kpi"><small>Transports confiés</small><b class="num">${s.cs.length}</b></div><div class="kpi"><small>Montant acheté HT</small><b class="num">${money(s.achat)}</b></div><div class="kpi"><small>Vendu HT</small><b class="num">${money(s.vente)}</b></div><div class="kpi ${s.marge<0?"bad":""}"><small>Marge gardée</small><b class="num">${money(s.marge)}</b></div>${kmActif()?`<div class="kpi"><small>Kilomètres</small><b class="num">${s.km?kmTxt(s.km):"—"}</b></div>`:""}</div>
+    ${Object.keys(s.types).length?`<div class="pan"><h2>Ce qu'il a facturé, par nature</h2><div class="tot" style="justify-content:start">${Object.keys(s.types).sort().map(t=>`<span>${esc(t)}</span><span>${money(s.types[t])}</span>`).join("")}<b>Total acheté HT</b><b>${money(s.achat)}</b></div></div>`:""}
+    <div class="pan"><h2>Transports confiés à ${esc(k.nom)}</h2><div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Client</th><th>Trajet</th>${kmActif()?`<th style="text-align:right">Km</th>`:""}<th>Coûts de ce sous-traitant</th><th style="text-align:right">Acheté HT</th><th style="text-align:right">Vendu HT</th><th style="text-align:right">Marge</th><th>État</th></tr></thead><tbody>
+    ${s.cs.length?s.cs.map(c=>{ const mine=coutsDe(c).filter(l=>l.st===k.id), a=r2(mine.reduce((t,l)=>t+(Number(l.montant)||0),0)), m=r2((Number(c.prix)||0)-totalCouts(c));
+      return `<tr class="click" tabindex="0" data-open="${esc(c.id)}"><td class="num">${d2(c.enlDate)}</td><td><b>${esc(c.donneur||"")}</b>${c.ref?`<div class="muted">Réf. ${esc(c.ref)}</div>`:""}</td><td>${esc(c.enlVille||"?")} → ${esc(c.livVille||"?")}</td>${kmActif()?`<td class="num" style="text-align:right">${kmTxt(c.km)}</td>`:""}<td>${mine.map(l=>`${esc(l.libelle)} : ${money(l.montant)}`).join("<br>")}</td><td class="num" style="text-align:right">${money(a)}</td><td class="num" style="text-align:right">${c.prix?money(c.prix):"—"}</td><td class="num" style="text-align:right${m<0?";color:var(--danger);font-weight:700":""}">${money(m)}</td><td><span class="chip st-${esc(c.statut)}">${esc({a_planifier:"À planifier",planifiee:"Planifié",envoyee:"Envoyé",en_cours:"En cours",terminee:"Terminé"}[c.statut]||c.statut)}</span></td></tr>`; }).join("")
+     :`<tr><td colspan="9"><div class="empty">Aucun transport confié à ${esc(k.nom)} sur cette période.</div></td></tr>`}</tbody></table></div></div>`; }
+  return tete+`<div id="stBody" style="display:flex;flex-direction:column;gap:14px">${corps}</div>`;
 };
 
 /* ---------- RELANCES CLIENTS ---------- */
@@ -432,18 +473,19 @@ T.views.clients = () => {
   ${manque.length?`<div class="banner" style="justify-content:flex-start"><span><b>Donneurs d'ordre sans fiche :</b></span>${manque.slice(0,12).map(n=>`<button type="button" class="btn btn-ghost btn-sm" data-f="cnew" data-nom="${esc(n)}">+ ${esc(n)}</button>`).join("")}</div>`:""}
   <div class="pan"><div class="tbl-wrap"><table><thead><tr><th>Client</th><th>Ville</th><th>SIREN</th><th>Contact</th><th>Délai de paiement</th><th>Factures</th></tr></thead><tbody>
   ${F.clients.length?F.clients.map(c=>{ const n=F.pieces.filter(p=>p.client_id===c.id&&p.type==="facture").length; const incomplet=!c.adresse||!c.siren;
-    return `<tr class="click" tabindex="0" data-f="copen" data-id="${esc(c.id)}"><td><b>${esc(c.nom)}</b>${c.actif===false?` <span class="muted">(archivé)</span>`:""}${incomplet?`<div style="color:var(--danger);font-size:12px">Fiche à compléter (adresse, SIREN)</div>`:""}</td><td>${esc([c.cp,c.ville].filter(Boolean).join(" "))}</td><td class="num">${esc(c.siren||"")}</td><td>${esc(c.contact||"")}${c.email?`<div class="muted">${esc(c.email)}</div>`:""}</td><td>${c.delai_paiement!=null?esc(c.delai_paiement)+" jours":`<span class="muted">Par défaut</span>`}</td><td class="num">${n}</td></tr>`; }).join("")
+    return `<tr class="click" tabindex="0" data-f="copen" data-id="${esc(c.id)}"><td><b>${esc(c.nom)}</b>${c.sous_traitant?` <span class="chip st-planifiee">Sous-traitant</span>`:""}${c.actif===false?` <span class="muted">(archivé)</span>`:""}${incomplet?`<div style="color:var(--danger);font-size:12px">Fiche à compléter (adresse, SIREN)</div>`:""}</td><td>${esc([c.cp,c.ville].filter(Boolean).join(" "))}</td><td class="num">${esc(c.siren||"")}</td><td>${esc(c.contact||"")}${c.email?`<div class="muted">${esc(c.email)}</div>`:""}</td><td>${c.delai_paiement!=null?esc(c.delai_paiement)+" jours":`<span class="muted">Par défaut</span>`}</td><td class="num">${n}</td></tr>`; }).join("")
    :`<tr><td colspan="6"><div class="empty">Aucun client. Ajoutez vos donneurs d'ordre pour pouvoir les facturer.</div></td></tr>`}</tbody></table></div></div>`;
 };
 function clientForm(c){
   F.clientId=c.id||null; const used=c.id && F.pieces.some(p=>p.client_id===c.id);
   openModal(`<div data-lock="keep" style="display:flex;flex-direction:column;gap:14px"><h2>${c.id?esc(c.nom):"Nouveau client"}</h2>
     <form id="cliForm" style="display:flex;flex-direction:column;gap:14px"><div class="fgrid">${CF.map(([k,l,t])=>`<label class="fld">${l}<input class="fin" type="${t}" id="cl_${k}" value="${esc(c[k]??"")}" ${k==="nom"?"required":""} ${t==="number"?'min="0" max="90"':""}></label>`).join("")}</div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" id="cl_st" ${c.sous_traitant?"checked":""} style="width:18px;height:18px">Sous-traitant (transporteur à qui je confie des transports)</label>
     <label class="fld">Notes internes<textarea class="fin" id="cl_notes" rows="2">${esc(c.notes||"")}</textarea></label>
     <div class="row-btns">${c.id?`<button type="button" class="btn btn-danger" data-f="${used?"carch":"cdel"}" style="margin-right:auto">${used?(c.actif===false?"Réactiver":"Archiver"):"Supprimer"}</button>`:""}<button type="button" class="btn btn-ghost" data-act="close">Annuler</button><button type="submit" class="btn btn-accent">Enregistrer</button></div></form></div>`);
 }
 async function saveClient(){
-  const o={}; CF.forEach(([k,,t])=>{ const v=$("#cl_"+k).value.trim(); o[k]= v==="" ? null : (t==="number"?Number(v):v); }); o.notes=$("#cl_notes").value.trim()||null;
+  const o={}; CF.forEach(([k,,t])=>{ const v=$("#cl_"+k).value.trim(); o[k]= v==="" ? null : (t==="number"?Number(v):v); }); o.notes=$("#cl_notes").value.trim()||null; o.sous_traitant=$("#cl_st").checked;
   if(!o.nom){ toast("Indiquez le nom du client."); return; }
   if(o.siren){ o.siren=o.siren.replace(/\s/g,""); if(!/^\d{9}$/.test(o.siren)){ toast("Le SIREN comporte 9 chiffres (les 9 premiers du SIRET)."); return; } }
   const dup=clientByName(o.nom); if(dup && dup.id!==F.clientId){ toast("Un client porte déjà ce nom."); return; }
@@ -530,13 +572,19 @@ document.addEventListener("click", async e=>{
     let km=null; try{ km=await calcKm(c); }catch(e){} el.disabled=false; el.textContent="Recalculer";
     if(km==null){ toast("Distance introuvable : vérifiez les adresses, ou saisissez-la à la main."); return; }
     const {error}=await sb.from("courses").update({km,km_cle:kmCle(c)}).eq("id",c.id); if(error){ toast(fErr(error)); return; } c.km=km; c.kmCle=kmCle(c); const i=$("#kmIn"); if(i) i.value=km; toast("Distance calculée : "+kmTxt(km)); }
-  else if(a==="ctadd"){ CT.lignes.push({libelle:"",montant:""}); $("#ctBox").innerHTML=coutInner(); const all=document.querySelectorAll('[data-ct="libelle"]'); all[all.length-1]?.focus(); }
+  else if(a==="ctadd"){ CT.lignes.push({type:CT_TYPES[0],texte:"",montant:"",st:""}); $("#ctBox").innerHTML=coutInner(); const all=document.querySelectorAll('[data-ct="type"]'); all[all.length-1]?.focus(); }
   else if(a==="ctdel"){ CT.lignes.splice(Number(d.i),1); $("#ctBox").innerHTML=coutInner(); }
   else if(a==="ctsave"){ const c=S.courses.find(x=>x.id===CT.id); if(!c) return;
     if(CT.lignes.some(l=>String(l.montant).trim()!=="" && !(Number(l.montant)>=0))){ toast("Un montant n'est pas valide."); return; }
-    const L=CT.lignes.map(l=>({libelle:String(l.libelle||"").trim()||"Coût",montant:r2(Number(l.montant)||0)})).filter(l=>l.montant>0 || l.libelle!=="Coût");
-    const {error}=await sb.from("courses").update({couts:L}).eq("id",c.id); if(error){ toast(fErr(error)); return; }
-    c.couts=L; CT.lignes=JSON.parse(JSON.stringify(L)); $("#ctBox").innerHTML=coutInner(); toast("Coûts d'achat enregistrés"); }
+    el.disabled=true;
+    for(const l of CT.lignes){ if(l.stnom===undefined) continue; const nom=String(l.stnom||"").trim(); if(!nom){ l.st=""; delete l.stnom; continue; }
+      let x=clientByName(nom);
+      if(!x){ const r=await sb.from("clients").insert({entreprise_id:EID(),nom,sous_traitant:true}).select().single(); if(r.error){ toast(fErr(r.error)); el.disabled=false; return; } x=r.data; F.clients.push(x); }
+      else if(!x.sous_traitant){ const r=await sb.from("clients").update({sous_traitant:true}).eq("id",x.id); if(r.error){ toast(fErr(r.error)); el.disabled=false; return; } x.sous_traitant=true; }
+      l.st=x.id; delete l.stnom; }
+    const L=CT.lignes.map(l=>({libelle:l.type==="Autre"?(String(l.texte||"").trim()||"Autre"):l.type,montant:r2(Number(l.montant)||0),st:l.st||null})).filter(l=>l.montant>0 || l.st);
+    const {error}=await sb.from("courses").update({couts:L}).eq("id",c.id); el.disabled=false; if(error){ toast(fErr(error)); return; }
+    c.couts=L; CT.lignes=L.map(l=>({ type:CT_TYPES.includes(l.libelle)?l.libelle:"Autre", texte:CT_TYPES.includes(l.libelle)?"":l.libelle, montant:l.montant, st:l.st||"" })); $("#ctBox").innerHTML=coutInner(); toast("Coûts d'achat enregistrés"); }
   else if(a==="actmode"){ A.mode=d.v; render(); }
   else if(a==="actnav"){ if(d.v==="0") A.ref=todayIso(); else actDecale(Number(d.v)); render(); }
   else if(a==="actpick"){ A.cond=d.id; render(); window.scrollTo(0,0); }
@@ -550,7 +598,12 @@ document.addEventListener("click", async e=>{
     const bad=res.find(r=>r.error); if(bad){ toast(fErr(bad.error)); el.disabled=false; return; }
     const mail=$("#rMail").value.trim(); const cl=clientById(g.id); if(mail && cl && !cl.email) await sb.from("clients").update({email:mail}).eq("id",cl.id);
     closeModal(); toast(`Relance enregistrée sur ${g.fact.length} facture${g.fact.length>1?"s":""}`); reload(); }
-  else if(a==="cnew"){ clientForm({nom:d.nom||""}); }
+  else if(a==="cnew"){ clientForm({nom:d.nom||"",sous_traitant:d.st==="1"}); }
+  else if(a==="stmode"){ B.mode=d.v; render(); }
+  else if(a==="stnav"){ if(d.v==="0") B.ref=todayIso(); else actDecale(Number(d.v),B); render(); }
+  else if(a==="stpick"){ B.st=d.id; render(); window.scrollTo(0,0); }
+  else if(a==="stprint"){ let z=$("#printzone"); if(!z){ z=document.createElement("div"); z.id="printzone"; document.body.appendChild(z); } const k=clientById(B.st);
+    z.innerHTML=`<div class="paper"><h3>Sous-traitance — ${esc(k?k.nom:"tous les sous-traitants")}</h3><div>${esc(actPeriode(B).txt)} · ${esc(S.entreprise?.nom||"")}</div>${$("#stBody").innerHTML}</div>`; window.print(); }
   else if(a==="copen"){ const c=clientById(d.id); if(c) clientForm(c); }
   else if(a==="cdel"){ if(!el.dataset.ok){ el.dataset.ok="1"; el.textContent="Confirmer la suppression"; return; } const {error}=await sb.from("clients").delete().eq("id",F.clientId); if(error){ toast(fErr(error)); return; } closeModal(); toast("Client supprimé"); reload(); }
   else if(a==="carch"){ const c=clientById(F.clientId); const {error}=await sb.from("clients").update({actif:c.actif===false}).eq("id",c.id); if(error){ toast(fErr(error)); return; } closeModal(); toast(c.actif===false?"Client réactivé":"Client archivé"); reload(); }
@@ -571,6 +624,9 @@ document.addEventListener("input", e=>{
 });
 document.addEventListener("change", async e=>{
   const de=e.target.dataset||{};
+  if(de.ct==="type" || de.ct==="st"){ const l=CT.lignes[Number(de.i)]; if(!l) return; if(de.ct==="type") l.type=e.target.value; else if(e.target.value==="__new"){ l.st=""; l.stnom=""; } else l.st=e.target.value;
+    $("#ctBox").innerHTML=coutInner(); if(l.stnom!==undefined) document.querySelector(`[data-ct="stnom"][data-i="${de.i}"]`)?.focus(); return; }
+  if(e.target.id==="stSel"){ B.st=e.target.value; render(); return; }
   if(de.ech){ const liste=S[de.ech]; const o=liste&&liste.find(x=>x.id===de.id); if(!o) return;
     const ech=Object.assign({},o.echeances||{}); if(e.target.value) ech[de.k]=e.target.value; else delete ech[de.k];
     const {error}=await sb.from(de.ech).update({echeances:ech}).eq("id",o.id);
