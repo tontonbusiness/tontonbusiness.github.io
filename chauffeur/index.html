@@ -239,6 +239,13 @@ button.dot{background:var(--surface);cursor:pointer;padding:0;width:34px;height:
 /* iPhone : un champ en dessous de 16 px fait zoomer la page à la saisie (et elle ne dézoome pas) ; le double-tap ne doit pas zoomer non plus */
 @media (max-width:900px),(pointer:coarse){ input,select,textarea{font-size:16px} }
 button,a,label,[role=button],.btn,.card,.blk,tr.click{touch-action:manipulation}
+
+/* photos de réserve à la livraison */
+.rbox{display:flex;flex-direction:column;gap:8px;align-items:stretch}
+.rphs{display:flex;flex-wrap:wrap;gap:8px}
+.rph{position:relative;width:76px;height:76px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--surface-2)}
+.rph img{width:100%;height:100%;object-fit:cover;display:block}
+.rph button{position:absolute;top:2px;right:2px;width:26px;height:26px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff;font-size:18px;line-height:1;cursor:pointer;padding:0}
 </style>
 </head>
 <body>
@@ -261,6 +268,6 @@ button,a,label,[role=button],.btn,.card,.blk,tr.click{touch-action:manipulation}
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>window.TP_MODE="chauffeur";</script>
 <script src="../app/config.js?v=4"></script>
-<script src="../app/app.js?v=17"></script>
+<script src="../app/app.js?v=19"></script>
 </body>
 </html>

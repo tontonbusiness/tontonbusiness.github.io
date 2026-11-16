@@ -519,7 +519,7 @@ function courseForm(c,opts={}){
   const camOpts=`<option value="">— Aucun —</option>`+activeCams().map(k=>`<option value="${esc(k.id)}" ${c.camionId===k.id?"selected":""}>${esc(k.immat)} · ${esc(k.type||"")}</option>`).join("");
   const remOpts=`<option value="">— Aucune —</option>`+activeRems().map(k=>`<option value="${esc(k.id)}" ${c.remorqueId===k.id?"selected":""}>${esc(k.immat)}</option>`).join("");
   const stOpts=Object.entries(STATUTS).map(([k,v])=>`<option value="${k}" ${(c.statut||"a_planifier")===k?"selected":""}>${v.l}</option>`).join("");
-  const docs=(c.docs||[]).map((d,i)=>`<li><button type="button" class="linkbtn" data-doc="${esc(d.path)}">${esc(d.type==="confirmation"?"Confirmation client":d.type==="bl"?"BL / CMR":d.type==="signature"?"Signature du destinataire":"Document")} — ${esc(d.nom||"")}</button></li>`).join("");
+  const docs=(c.docs||[]).map((d,i)=>`<li><button type="button" class="linkbtn" data-doc="${esc(d.path)}">${esc(d.type==="confirmation"?"Confirmation client":d.type==="bl"?"BL / CMR":d.type==="signature"?"Signature du destinataire":d.type==="reserve"?"Photo de la réserve":"Document")} — ${esc(d.nom||"")}</button></li>`).join("");
   const incs=incOf(c);
   const incHtml = incs.length ? `<div class="${incNew(c).length?"alert":""}" style="display:flex;flex-direction:column;gap:6px"><b>Problèmes signalés par le conducteur</b><ul style="margin:0;padding-left:18px">${incs.map(i=>`<li>${esc(i.heure||"")}${i.le?" ("+esc(frDate(String(i.le).slice(0,10),{day:"numeric",month:"short"}))+")":""} · <b style="color:inherit">${esc(INC[i.type]||"Autre")}</b>${i.commentaire?" — "+esc(i.commentaire):""}${i.path?` · <button type="button" class="linkbtn" data-doc="${esc(i.path)}">Voir la photo</button>`:""}${i.vu?` <span class="muted">(traité)</span>`:""}</li>`).join("")}</ul>${incNew(c).length?`<button type="button" class="btn btn-ghost btn-sm" data-act="incvu" style="align-self:flex-start">Marquer comme traité</button>`:""}</div>` : "";
   const sigHtml = c.signataire ? `<div><b>Livraison signée par :</b> ${esc(c.signataire)}</div>` : "";
@@ -764,10 +764,29 @@ function openIncident(id){
     <label class="btn btn-ghost" style="position:relative"><span id="incPhotoLbl">Ajouter une photo (facultatif)</span><input type="file" accept="image/*" class="hidden-file" id="incPhoto"></label>
     <div class="two"><button type="button" class="btn btn-ghost" data-act="close">Annuler</button><button type="button" class="btn btn-accent" data-drv="incOk" data-id="${esc(id)}">Envoyer</button></div></div>`);
 }
+/* photos de réserve : prises sur l'écran « Livré avec réserves », envoyées à la validation et rattachées à la course */
+const RES_MAX = 5;
+const resPhHtml = () => { const n=(S.resPh||[]).length;
+  const th=(S.resPh||[]).map((p,i)=>`<span class="rph"><img src="${p.url}" alt="Photo ${i+1} de la réserve"><button type="button" data-drv="resPhDel" data-i="${i}" aria-label="Retirer la photo ${i+1}">×</button></span>`).join("");
+  return `${th?`<div class="rphs">${th}</div>`:""}${n<RES_MAX?`<label class="btn btn-ghost" style="position:relative">📷 Prendre une photo${n?` (${n}/${RES_MAX})`:""}<input type="file" accept="image/*" capture="environment" class="hidden-file" id="resPhoto"></label>`:`<span class="muted">${RES_MAX} photos maximum.</span>`}${n?"":`<span class="muted" style="font-size:13px">Ajoute une photo pour justifier la réserve.</span>`}`; };
+function resPhClear(){ (S.resPh||[]).forEach(p=>{ try{URL.revokeObjectURL(p.url);}catch(e){} }); S.resPh=[]; S.resTxt=""; }
+function reduirePhoto(file){ return new Promise(res=>{
+  if(!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size<900*1024){ res(file); return; }
+  const url=URL.createObjectURL(file); const img=new Image();
+  img.onload=()=>{ try{ const k=Math.min(1,1800/Math.max(img.width,img.height)); const cv=document.createElement("canvas"); cv.width=Math.round(img.width*k); cv.height=Math.round(img.height*k);
+      cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height); URL.revokeObjectURL(url); cv.toBlob(b=>res(b&&b.size<file.size?b:file),"image/jpeg",.82); }catch(e){ URL.revokeObjectURL(url); res(file); } };
+  img.onerror=()=>{ URL.revokeObjectURL(url); res(file); }; img.src=url; }); }
+async function envoyerPhotosReserve(id){ const L=(S.resPh||[]).slice(); if(!L.length) return; let ko=0;
+  for(let i=0;i<L.length;i++){ try{ const f=await reduirePhoto(L[i].file); const ext=f.type==="image/jpeg"?".jpg":((L[i].file.name.match(/\.\w+$/)||[".jpg"])[0].toLowerCase());
+      const path=`${EID()}/reserve/${id}-${Date.now()}-${i}${ext}`; const up=await sb.storage.from("documents").upload(path,f,{contentType:f.type||"image/jpeg"}); if(up.error){ ko++; continue; }
+      const {error}=await sb.rpc("ajouter_document",{p_course:id,p_path:path,p_nom:"photo-reserve-"+(i+1),p_type:"reserve"}); if(error) ko++; }
+    catch(e){ ko++; } }
+  if(ko) toast(ko===L.length ? "La livraison est validée, mais les photos n'ont pas pu être envoyées. Préviens l'exploitation." : "La livraison est validée, mais "+ko+" photo"+(ko>1?"s":"")+" n'a pas pu être envoyée"+(ko>1?"s":"")+".");
+}
 async function deliver(id,reserve){
   const {error}=await sb.rpc("etape_course",{p_course:id,p_etape:"livre",p_reserve:reserve||null});
   if(error){ toast(errMsg(error)); return false; }
-  S.reserveFor=null; await loadData(); showDone(id); return true;
+  S.reserveFor=null; resPhClear(); await loadData(); showDone(id); return true;
 }
 function jobHtml(c,n,cur){
   const st=c.statut; const done=st==="terminee"||st==="annulee"; const id=esc(c.id);
@@ -780,7 +799,7 @@ function jobHtml(c,n,cur){
   else if(next==="charge_enl") enlBtn=`<button type="button" class="btn btn-navy big" data-drv="charge_enl" data-id="${id}">Chargement terminé</button>`;
   else if(next==="arrivee_liv") livBtn=`<button type="button" class="btn btn-navy big" data-drv="arrivee_liv" data-id="${id}">Je suis arrivé à la livraison</button>`;
   else if(next==="livre") livBtn = S.reserveFor===c.id
-    ? `<label class="fld">Décrivez la réserve (casse, manquant, retard…)<textarea id="resTxt"></textarea></label><div class="two"><button type="button" class="btn btn-ghost" data-drv="resCancel" data-id="${id}">Annuler</button><button type="button" class="btn btn-danger" data-drv="resOk" data-id="${id}">Valider la livraison</button></div>`
+    ? `<label class="fld">Décrivez la réserve (casse, manquant, retard…)<textarea id="resTxt">${esc(S.resTxt||"")}</textarea></label><div id="resPhBox" class="rbox">${resPhHtml()}</div><div class="two"><button type="button" class="btn btn-ghost" data-drv="resCancel" data-id="${id}">Annuler</button><button type="button" class="btn btn-danger" data-drv="resOk" data-id="${id}">Valider la livraison</button></div>`
     : `<div class="two"><button type="button" class="btn btn-accent big" data-drv="livre" data-id="${id}">Livré sans réserve</button><button type="button" class="btn btn-danger big" data-drv="reserve" data-id="${id}">Livré avec réserves</button></div>`;
   // le rond est aussi un bouton : un appui valide l'étape en cours
   const dot=(ok,isCur,which)=>{
@@ -819,8 +838,9 @@ async function drvAction(act,id,el){
   if(act==="toggle"){ S.openJobs.has(id)?S.openJobs.delete(id):S.openJobs.add(id); render(); return; }
   if(act==="incident"){ openIncident(id); return; }
   if(act==="next"){ closeModal(); S.drvDay="today"; render(); const j=document.getElementById("job-"+id); j&&j.scrollIntoView({block:"start"}); return; }
-  if(act==="reserve"){ S.reserveFor=id; render(); const r=$("#resTxt"); r&&r.focus(); return; }
-  if(act==="resCancel"){ S.reserveFor=null; render(); return; }
+  if(act==="reserve"){ resPhClear(); S.reserveFor=id; render(); const r=$("#resTxt"); r&&r.focus(); return; }
+  if(act==="resCancel"){ S.reserveFor=null; resPhClear(); render(); return; }
+  if(act==="resPhDel"){ const p=(S.resPh||[]).splice(Number(el.dataset.i),1)[0]; if(p){ try{URL.revokeObjectURL(p.url);}catch(e){} } const b=$("#resPhBox"); if(b) b.innerHTML=resPhHtml(); return; }
   if(act==="sigClear"){ S.sign&&S.sign.clear&&S.sign.clear(); return; }
   if(act==="sigCancel"){ closeModal(); return; }
   if(act==="sigSkip"){ const rv=S.sign?S.sign.reserve:null; closeModal(); await deliver(id,rv); return; }
@@ -854,7 +874,8 @@ async function drvAction(act,id,el){
   }
   if(act==="livre"||act==="resOk"){
     let reserve=null;
-    if(act==="resOk"){ reserve=($("#resTxt")?.value||"").trim(); if(!reserve){ toast("Décrivez la réserve avant de valider."); return; } }
+    if(act==="resOk"){ reserve=($("#resTxt")?.value||"").trim(); if(!reserve){ toast("Décrivez la réserve avant de valider."); return; }
+      if((S.resPh||[]).length){ const bt=el; if(bt){ bt.disabled=true; bt.textContent="Envoi des photos…"; } await envoyerPhotosReserve(id); } }
     if(packOn()) openSign(id,reserve); else await deliver(id,reserve);
     return;
   }
@@ -1052,9 +1073,12 @@ document.addEventListener("click",async e=>{
 document.addEventListener("change",e=>{
   if(e.target.id==="f_camionId"){ const w=$("#remWrap"); if(w){ w.hidden=!isTracteur(e.target.value); const cam=camById(e.target.value); const rs=$("#f_remorqueId"); if(rs && !rs.value && cam?.remorqueId) rs.value=cam.remorqueId; } }
   if(e.target.id==="meSel"){ S.me=e.target.value; store.set("tp_me",S.me); render(); }
+  if(e.target.id==="resPhoto"){ const f=e.target.files&&e.target.files[0]; e.target.value="";
+    if(f){ if(!/^image\//.test(f.type)){ toast("Choisis une photo."); } else if(f.size>25*1024*1024){ toast("Photo trop lourde."); } else if((S.resPh||[]).length<RES_MAX){ (S.resPh=S.resPh||[]).push({file:f,url:URL.createObjectURL(f)}); const b=$("#resPhBox"); if(b) b.innerHTML=resPhHtml(); } } }
   if(e.target.id==="incPhoto"){ const l=$("#incPhotoLbl"); if(l) l.textContent = e.target.files&&e.target.files[0] ? "Photo ajoutée ✓ (toucher pour changer)" : "Ajouter une photo (facultatif)"; }
   if(e.target.dataset && e.target.dataset.bl){ const f=e.target.files&&e.target.files[0]; if(f) uploadBL(e.target.dataset.bl,f); }
 });
+document.addEventListener("input",e=>{ if(e.target.id==="resTxt") S.resTxt=e.target.value; });
 document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("#modal").innerHTML) closeModal(); });
 
 /* ---------- démarrage ---------- */
