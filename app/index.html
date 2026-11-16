@@ -267,6 +267,9 @@ td.num{white-space:nowrap} .lines{min-width:680px} .lines td{padding:6px 6px;ver
 #printzone{display:none}
 @media (max-width:600px){ .paper{padding:14px} .paper .two-col{grid-template-columns:1fr} }
 @media print{ body>*:not(#printzone){display:none!important} #printzone{display:block!important} #printzone .paper{border:0;border-radius:0;padding:0} #printzone .pan{border:0;padding:0;break-inside:avoid} #printzone .kpis{grid-template-columns:repeat(4,1fr)} #printzone .kpi{border:1px solid #D5DBE3;background:#FFFFFF} #printzone .kpi b,#printzone .pan h2{color:#14202E} #printzone .muted{color:#566170} #printzone .chip{background:#FFFFFF;color:#14202E} @page{margin:14mm} }
+/* iPhone : un champ en dessous de 16 px fait zoomer la page à la saisie (et elle ne dézoome pas) ; le double-tap ne doit pas zoomer non plus */
+@media (max-width:900px),(pointer:coarse){ input,select,textarea{font-size:16px} }
+button,a,label,[role=button],.btn,.card,.blk,tr.click{touch-action:manipulation}
 </style>
 </head>
 <body>

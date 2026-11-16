@@ -236,6 +236,9 @@ button.dot{background:var(--surface);cursor:pointer;padding:0;width:34px;height:
 .side .foot{margin-top:auto;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--side-muted)}
 .side .foot button{background:transparent;border:1px solid var(--side-muted);color:var(--side-fg);border-radius:8px;padding:7px 10px;cursor:pointer}
 
+/* iPhone : un champ en dessous de 16 px fait zoomer la page à la saisie (et elle ne dézoome pas) ; le double-tap ne doit pas zoomer non plus */
+@media (max-width:900px),(pointer:coarse){ input,select,textarea{font-size:16px} }
+button,a,label,[role=button],.btn,.card,.blk,tr.click{touch-action:manipulation}
 </style>
 </head>
 <body>
