@@ -1,9 +1,9 @@
-/* Dashlog — application (exploitation + conducteurs) — Tonton Business */
+/* Mobilog — application (exploitation + conducteurs) — Tonton Business */
 (function(){
 "use strict";
 const CFG = window.TP_CONFIG;
 const MODE = window.TP_MODE==="chauffeur" ? "chauffeur" : "exploitation"; // /chauffeur = application Dream Chauffeur
-const APPNAME = MODE==="chauffeur" ? "Dream Chauffeur" : "Dashlog";
+const APPNAME = MODE==="chauffeur" ? "Dream Chauffeur" : "Mobilog";
 const CHAUFFEUR_URL = CFG.chauffeurUrl || "https://tontonbusiness.com/chauffeur/";
 const standalone = () => { try{ return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone===true; }catch(e){ return false; } };
 const appareil = () => { const u=navigator.userAgent||""; const d=/iPhone/.test(u)?"iPhone":/iPad/.test(u)?"iPad":/Android/.test(u)?"Android":"Ordinateur"; return d+(standalone()?" · application":" · navigateur"); };
@@ -199,7 +199,7 @@ const after = {};
 const X = { views:{}, nav:null, onData:[], after, S, sb, $, esc, toast, errMsg, openModal, closeModal, render, loadData, EID, isStaff, frDate, todayIso, addDays };
 
 /* ---------- CONNEXION ---------- */
-function authShell(inner){ const img = MODE==="chauffeur" ? `<img src="icon-192.png" alt="" style="border-radius:12px">` : `<img src="../logo-blanc.png" alt="Dashlog">`;
+function authShell(inner){ const img = MODE==="chauffeur" ? `<img src="icon-192.png" alt="" style="border-radius:12px">` : `<img src="../logo-blanc.png" alt="Mobilog">`;
   return `<div class="auth"><div class="auth-card"><div class="logo">${img}<b>${APPNAME}</b></div>${inner}</div></div>`; }
 /* ---------- NOTIFICATIONS (Dream Chauffeur) ---------- */
 const pushOk = () => MODE==="chauffeur" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -656,7 +656,7 @@ function vDriver(){
   const day = S.drvDay==="today"?todayIso():addDays(todayIso(),1);
   const sel = staff ? `<label style="display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--side-muted)">Aperçu pour le conducteur<select id="meSel"><option value="">— Choisir —</option>${activeConds().map(k=>`<option value="${esc(k.id)}" ${S.me===k.id?"selected":""}>${esc(k.nom)}</option>`).join("")}</select></label>` : "";
   const back = staff ? `<p class="muted" style="text-align:center;margin:0"><a href="${MODE==="chauffeur"?esc(CFG.appUrl):"#planning"}">Retour à l'exploitation</a></p>` : `<p class="muted" style="text-align:center;margin:0;font-size:12px"><button type="button" class="linkbtn" data-act="refresh">Actualiser</button></p>`;
-  const logo = MODE==="chauffeur" ? `<img src="icon-192.png" alt="Dream Chauffeur" style="width:38px;border-radius:9px">` : `<img src="../logo-blanc.png" alt="Dashlog" style="width:38px">`;
+  const logo = MODE==="chauffeur" ? `<img src="icon-192.png" alt="Dream Chauffeur" style="width:38px;border-radius:9px">` : `<img src="../logo-blanc.png" alt="Mobilog" style="width:38px">`;
   const tip = staff ? "" : installTip();
   if(!me) return `<div class="drv"><div class="drv-head"><h1>Vue conducteur</h1>${staff?`<p style="margin:0;color:var(--side-muted)">Choisissez un conducteur pour voir son écran.</p>${sel}`:`<p style="margin:0">Votre fiche conducteur est introuvable. Contactez votre exploitation.</p>`}</div>${back}</div>`;
   const vis=myDay(me.id,day);

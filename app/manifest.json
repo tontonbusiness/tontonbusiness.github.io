@@ -1,6 +1,6 @@
 {
-  "name": "Dashlog",
-  "short_name": "Dashlog",
+  "name": "Mobilog",
+  "short_name": "Mobilog",
   "description": "Planning des courses et vue conducteur",
   "start_url": "./",
   "scope": "./",

@@ -1,4 +1,4 @@
-/* Dashlog — facturation de ventes, devis, carnet d'adresses, paramètres — Tonton Business */
+/* Mobilog — facturation de ventes, devis, carnet d'adresses, paramètres — Tonton Business */
 (function(){
 "use strict";
 const T = window.TP; if(!T) return;
