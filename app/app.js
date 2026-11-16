@@ -163,9 +163,12 @@ const remById = id => S.remorques.find(c=>c.id===id);
 const condName = id => condById(id)?.nom || "";
 const camName = id => camById(id)?.immat || "";
 const remName = id => remById(id)?.immat || "";
-const activeConds = () => S.conducteurs.filter(c=>c.actif!==false).sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
+const activeConds = () => S.conducteurs.filter(c=>c.actif!==false).sort((a,b)=>cmpTxt(a.nom,b.nom));
 const activeCams = () => S.camions.filter(c=>c.actif!==false).sort((a,b)=>(a.immat||"").localeCompare(b.immat||""));
 const activeRems = () => S.remorques.filter(c=>c.actif!==false).sort((a,b)=>(a.immat||"").localeCompare(b.immat||""));
+const catVeh = k => /tracteur|semi/i.test((k&&k.type)||"") ? "tracteur" : /porteur/i.test((k&&k.type)||"") ? "porteur" : "autre";
+const CAT_ORDRE = { tracteur:0, porteur:1, autre:2 }, CAT_LIB = { tracteur:"Tracteurs", porteur:"Porteurs", autre:"Autres véhicules" };
+const cmpTxt = (a,b) => String(a||"").localeCompare(String(b||""),"fr",{sensitivity:"base",numeric:true});
 const isTracteur = id => /tracteur|semi/i.test(camById(id)?.type||"");
 const vehLabel = c => [camName(c.camionId), c.remorqueId&&isTracteur(c.camionId)?remName(c.remorqueId):""].filter(Boolean).join(" + ");
 const isRepos = (c,date) => Array.isArray(c?.repos) && c.repos.includes(date);
@@ -206,7 +209,7 @@ function render(){
 }
 const after = {};
 /* points d'accroche pour les modules complémentaires (facturation, carnet d'adresses…) */
-const X = { views:{}, nav:null, onData:[], after, S, sb, $, esc, toast, errMsg, openModal, closeModal, render, loadData, EID, isStaff, frDate, todayIso, addDays };
+const X = { catVeh, CAT_LIB, CAT_ORDRE, cmpTxt, views:{}, nav:null, onData:[], after, S, sb, $, esc, toast, errMsg, openModal, closeModal, render, loadData, EID, isStaff, frDate, todayIso, addDays };
 
 /* ---------- CONNEXION ---------- */
 function authShell(inner){ const img = MODE==="chauffeur" ? `<img src="icon-192.png" alt="" style="border-radius:12px">` : `<img src="../logo-blanc.png" alt="Mobilog">`;
@@ -954,6 +957,7 @@ function vParams(){
   const conds=S.conducteurs.slice().sort((a,b)=>(a.nom||"").localeCompare(b.nom||""));
   const cams=S.camions.slice().sort((a,b)=>(a.immat||"").localeCompare(b.immat||""));
   const rems=S.remorques.slice().sort((a,b)=>(a.immat||"").localeCompare(b.immat||""));
+  const camsG=cams.slice().sort((a,b)=>CAT_ORDRE[catVeh(a)]-CAT_ORDRE[catVeh(b)]||cmpTxt(a.immat,b.immat)); const hd=new Map(); camsG.forEach(k=>{ if(![...hd.keys()].some(id=>catVeh(camsG.find(x=>x.id===id))===catVeh(k))) hd.set(k.id,CAT_LIB[catVeh(k)]+" ("+camsG.filter(x=>catVeh(x)===catVeh(k)).length+")"); });
   const camOpt=sel=>`<option value="">—</option>`+cams.map(k=>`<option value="${esc(k.id)}" ${sel===k.id?"selected":""}>${esc(k.immat)}</option>`).join("");
   const remOpt=sel=>`<option value="">—</option>`+rems.map(k=>`<option value="${esc(k.id)}" ${sel===k.id?"selected":""}>${esc(k.immat)}</option>`).join("");
   const codeOf=id=>(S.acces||[]).find(a=>a.conducteur_id===id);
@@ -975,9 +979,9 @@ function vParams(){
     ${conds.map(k=>`<tr><td><input type="text" id="cn_${esc(k.id)}" value="${esc(k.nom||"")}" aria-label="Nom"></td><td><input type="tel" id="ct_${esc(k.id)}" value="${esc(k.tel||"")}" aria-label="Téléphone"></td><td><select id="cc_${esc(k.id)}" aria-label="Véhicule habituel">${camOpt(k.camionId)}</select></td><td><input type="checkbox" id="ca_${esc(k.id)}" ${k.actif!==false?"checked":""} aria-label="Actif" style="width:20px;height:20px"></td><td style="white-space:nowrap">${codeCell(k.id)}</td><td style="white-space:nowrap">${cnx(k.id)}</td><td style="white-space:nowrap"><button type="button" class="btn btn-ghost btn-sm" data-savecond="${esc(k.id)}">Enregistrer</button> <button type="button" class="btn btn-ghost btn-sm" data-delcond="${esc(k.id)}">Supprimer</button></td></tr>`).join("")}
     <tr><td><input type="text" id="cn_new" placeholder="Nouveau conducteur" aria-label="Nom du nouveau conducteur"></td><td><input type="tel" id="ct_new" placeholder="06…" aria-label="Téléphone"></td><td><select id="cc_new" aria-label="Véhicule habituel">${camOpt("")}</select></td><td></td><td></td><td></td><td><button type="button" class="btn btn-accent btn-sm" data-act="addcond">Ajouter</button></td></tr>
     </tbody></table></div></section>
-  <section class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px"><h2 style="font-size:17px;color:var(--navy)">Camions et tracteurs <span class="muted" style="font-size:13px;font-family:var(--text)">${cams.length}</span></h2>
+  <section class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px"><h2 style="font-size:17px;color:var(--navy)">Tracteurs, porteurs et autres véhicules <span class="muted" style="font-size:13px;font-family:var(--text)">${cams.length}</span></h2>
     <div class="tbl-wrap"><table><thead><tr><th>Immatriculation</th><th>Type</th><th>Remorque habituelle</th><th>Actif</th><th></th></tr></thead><tbody>
-    ${cams.map(k=>`<tr><td><input type="text" id="vi_${esc(k.id)}" value="${esc(k.immat||"")}" aria-label="Immatriculation"></td><td><input type="text" id="vt_${esc(k.id)}" value="${esc(k.type||"")}" aria-label="Type"></td><td>${isTracteur(k.id)?`<select id="vr_${esc(k.id)}" aria-label="Remorque habituelle">${remOpt(k.remorqueId)}</select>`:`<span class="muted">—</span>`}</td><td><input type="checkbox" id="va_${esc(k.id)}" ${k.actif!==false?"checked":""} aria-label="Actif" style="width:20px;height:20px"></td><td style="white-space:nowrap"><button type="button" class="btn btn-ghost btn-sm" data-savecam="${esc(k.id)}">Enregistrer</button> <button type="button" class="btn btn-ghost btn-sm" data-delcam="${esc(k.id)}">Supprimer</button></td></tr>`).join("")}
+    ${camsG.map(k=>(hd.get(k.id)?`<tr class="grp"><th colspan="5" style="text-align:left;background:var(--surface-2,#f2f4f7);font-size:13px">${esc(hd.get(k.id))}</th></tr>`:"")+`<tr><td><input type="text" id="vi_${esc(k.id)}" value="${esc(k.immat||"")}" aria-label="Immatriculation"></td><td><input type="text" id="vt_${esc(k.id)}" value="${esc(k.type||"")}" aria-label="Type"></td><td>${isTracteur(k.id)?`<select id="vr_${esc(k.id)}" aria-label="Remorque habituelle">${remOpt(k.remorqueId)}</select>`:`<span class="muted">—</span>`}</td><td><input type="checkbox" id="va_${esc(k.id)}" ${k.actif!==false?"checked":""} aria-label="Actif" style="width:20px;height:20px"></td><td style="white-space:nowrap"><button type="button" class="btn btn-ghost btn-sm" data-savecam="${esc(k.id)}">Enregistrer</button> <button type="button" class="btn btn-ghost btn-sm" data-delcam="${esc(k.id)}">Supprimer</button></td></tr>`).join("")}
     <tr><td><input type="text" id="vi_new" placeholder="AB-123-CD" aria-label="Immatriculation du nouveau camion"></td><td><input type="text" id="vt_new" placeholder="Tracteur, Porteur 19 T, VUL…" aria-label="Type"></td><td></td><td></td><td><button type="button" class="btn btn-accent btn-sm" data-act="addcam">Ajouter</button></td></tr>
     </tbody></table></div></section>
   <section class="panel" style="padding:16px;display:flex;flex-direction:column;gap:10px"><h2 style="font-size:17px;color:var(--navy)">Remorques <span class="muted" style="font-size:13px;font-family:var(--text)">${rems.length}</span></h2>
@@ -1018,7 +1022,10 @@ async function showAcces(condId, regen){
 }
 
 /* ---------- clics globaux ---------- */
+function allerAccueil(){ closeModal(); S.date=todayIso(); const h=(location.hash||"").replace("#",""); if(h && h!=="planning"){ location.hash="planning"; } else { S.view="planning"; render(); window.scrollTo(0,0); } }
+document.addEventListener("keydown",e=>{ if((e.key==="Enter"||e.key===" ") && e.target.matches && e.target.matches("[data-home]")){ e.preventDefault(); allerAccueil(); } });
 document.addEventListener("click",async e=>{
+  if(e.target.closest && e.target.closest("[data-home]")){ allerAccueil(); return; }
   if(e.target.id==="mbg"){ if(!$("#modal [data-lock='keep']")) closeModal(); return; }
   const el=e.target.closest("[data-act],[data-open],[data-day],[data-mode],[data-repos],[data-fst],[data-fper],[data-drv],[data-dday],[data-impedit],[data-impdel],[data-savecond],[data-delcond],[data-savecam],[data-delcam],[data-saverem],[data-delrem],[data-auth],[data-acces],[data-regen],[data-unlink],[data-copy],[data-doc],[data-inctype]");
   if(!el) return;

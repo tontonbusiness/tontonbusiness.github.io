@@ -218,7 +218,10 @@ const SEUIL = 30; // jours avant l'échéance où l'on prévient
 const jours = d => Math.round((new Date(d+"T00:00:00") - new Date(todayIso()+"T00:00:00"))/864e5);
 const echOk = d => /^\d{4}-\d{2}-\d{2}$/.test(d||"") && d>="2000-01-01" && d<="2100-12-31";
 const echEtat = d => { if(!echOk(d)) return {k:"vide",txt:"À renseigner"}; const j=jours(d); return j<0 ? {k:"exp",txt:`Expiré depuis ${-j} j`} : j<=SEUIL ? {k:"bientot",txt:j===0?"Expire aujourd'hui":`Expire dans ${j} j`} : {k:"ok",txt:"Valide"}; };
-const echSrc = () => [ ...S.camions.filter(x=>x.actif!==false).map(x=>({t:"camions",g:"v",o:x,nom:x.immat,defs:ECH.v})), ...S.remorques.filter(x=>x.actif!==false).map(x=>({t:"remorques",g:"v",o:x,nom:x.immat,defs:ECH.r})), ...S.conducteurs.filter(x=>x.actif!==false).map(x=>({t:"conducteurs",g:"c",o:x,nom:x.nom,defs:ECH.c})) ];
+const vSort = l => l.slice().sort((a,b)=>T.CAT_ORDRE[T.catVeh(a)]-T.CAT_ORDRE[T.catVeh(b)]||T.cmpTxt(a.immat,b.immat));
+const rSort = l => l.slice().sort((a,b)=>T.cmpTxt(a.immat,b.immat));
+const cSort = l => l.slice().sort((a,b)=>T.cmpTxt(a.nom,b.nom));
+const echSrc = () => [ ...vSort(S.camions.filter(x=>x.actif!==false)).map(x=>({t:"camions",g:"v",o:x,nom:x.immat,defs:ECH.v})), ...rSort(S.remorques.filter(x=>x.actif!==false)).map(x=>({t:"remorques",g:"v",o:x,nom:x.immat,defs:ECH.r})), ...cSort(S.conducteurs.filter(x=>x.actif!==false)).map(x=>({t:"conducteurs",g:"c",o:x,nom:x.nom,defs:ECH.c})) ];
 const echListe = g => echSrc().filter(e=>e.g===g).flatMap(e=>e.defs.map(([k,l])=>({nom:e.nom,l,d:(e.o.echeances||{})[k]||"",e:echEtat((e.o.echeances||{})[k])})));
 function echCompte(g){ return echListe(g).filter(x=>x.e.k==="exp"||x.e.k==="bientot").length; }
 T.planAlerts = () => { const out=[]; [["v","véhicules","echvehicules"],["c","chauffeurs","echchauffeurs"]].forEach(([g,nom,v])=>{ const L=echListe(g); const ex=L.filter(x=>x.e.k==="exp"), bi=L.filter(x=>x.e.k==="bientot"); if(!ex.length&&!bi.length) return;
@@ -233,9 +236,9 @@ function echView(g){
   const table=(titre,rows,defs,t,col)=> rows.length ? `<div class="pan"><h2>${titre}</h2><div class="tbl-wrap"><table><thead><tr><th>${col}</th>${defs.map(([,l])=>`<th>${l}</th>`).join("")}</tr></thead><tbody>${rows.map(o=>`<tr><td><b>${esc(o.immat||o.nom)}</b>${o.type?`<div class="muted">${esc(o.type)}</div>`:""}</td>${defs.map(([k,l])=>echCell(t,o,k,l)).join("")}</tr>`).join("")}</tbody></table></div></div>` : "";
   const act=x=>x.actif!==false;
   if(g==="v") return `<div class="bar"><h1>Contrôles véhicules</h1></div><span class="muted" style="font-size:13px">Saisissez la date de fin de validité de chaque contrôle : elle s'enregistre toute seule. Une alerte apparaît sur le planning ${SEUIL} jours avant l'échéance, puis quand elle est dépassée.</span>${kp}
-    ${table("Camions et tracteurs",S.camions.filter(act),ECH.v,"camions","Immatriculation")}${table("Remorques",S.remorques.filter(act),ECH.r,"remorques","Immatriculation")}${S.camions.length+S.remorques.length?"":`<div class="pan"><div class="empty">Ajoutez d'abord vos véhicules dans « Conducteurs et véhicules ».</div></div>`}`;
+    ${["tracteur","porteur","autre"].map(c=>table(T.CAT_LIB[c],rSort(S.camions.filter(x=>act(x)&&T.catVeh(x)===c)),ECH.v,"camions","Immatriculation")).join("")}${table("Remorques",rSort(S.remorques.filter(act)),ECH.r,"remorques","Immatriculation")}${S.camions.length+S.remorques.length?"":`<div class="pan"><div class="empty">Ajoutez d'abord vos véhicules dans « Conducteurs et véhicules ».</div></div>`}`;
   return `<div class="bar"><h1>Documents chauffeurs</h1></div><span class="muted" style="font-size:13px">Saisissez la date de fin de validité de chaque document : elle s'enregistre toute seule. Une alerte apparaît sur le planning ${SEUIL} jours avant l'échéance, puis quand elle est dépassée.</span>${kp}
-    ${table("Conducteurs",S.conducteurs.filter(act),ECH.c,"conducteurs","Conducteur")||`<div class="pan"><div class="empty">Ajoutez d'abord vos conducteurs dans « Conducteurs et véhicules ».</div></div>`}`;
+    ${table("Chauffeurs",cSort(S.conducteurs.filter(act)),ECH.c,"conducteurs","Conducteur")||`<div class="pan"><div class="empty">Ajoutez d'abord vos conducteurs dans « Conducteurs et véhicules ».</div></div>`}`;
 }
 T.views.echvehicules = () => echView("v");
 T.views.echchauffeurs = () => echView("c");
