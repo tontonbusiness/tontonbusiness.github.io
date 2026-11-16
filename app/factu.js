@@ -216,7 +216,8 @@ const ECH = { v:[["ct","Contrôle technique"],["limiteur","Limiteur de vitesse"]
               c:[["permis","Permis de conduire"],["carte","Carte conducteur"],["fimo","FIMO / FCO"],["visite","Visite médicale"]] };
 const SEUIL = 30; // jours avant l'échéance où l'on prévient
 const jours = d => Math.round((new Date(d+"T00:00:00") - new Date(todayIso()+"T00:00:00"))/864e5);
-const echEtat = d => { if(!d) return {k:"vide",txt:"À renseigner"}; const j=jours(d); return j<0 ? {k:"exp",txt:`Expiré depuis ${-j} j`} : j<=SEUIL ? {k:"bientot",txt:j===0?"Expire aujourd'hui":`Expire dans ${j} j`} : {k:"ok",txt:"Valide"}; };
+const echOk = d => /^\d{4}-\d{2}-\d{2}$/.test(d||"") && d>="2000-01-01" && d<="2100-12-31";
+const echEtat = d => { if(!echOk(d)) return {k:"vide",txt:"À renseigner"}; const j=jours(d); return j<0 ? {k:"exp",txt:`Expiré depuis ${-j} j`} : j<=SEUIL ? {k:"bientot",txt:j===0?"Expire aujourd'hui":`Expire dans ${j} j`} : {k:"ok",txt:"Valide"}; };
 const echSrc = () => [ ...S.camions.filter(x=>x.actif!==false).map(x=>({t:"camions",g:"v",o:x,nom:x.immat,defs:ECH.v})), ...S.remorques.filter(x=>x.actif!==false).map(x=>({t:"remorques",g:"v",o:x,nom:x.immat,defs:ECH.r})), ...S.conducteurs.filter(x=>x.actif!==false).map(x=>({t:"conducteurs",g:"c",o:x,nom:x.nom,defs:ECH.c})) ];
 const echListe = g => echSrc().filter(e=>e.g===g).flatMap(e=>e.defs.map(([k,l])=>({nom:e.nom,l,d:(e.o.echeances||{})[k]||"",e:echEtat((e.o.echeances||{})[k])})));
 function echCompte(g){ return echListe(g).filter(x=>x.e.k==="exp"||x.e.k==="bientot").length; }
@@ -224,8 +225,8 @@ T.planAlerts = () => { const out=[]; [["v","véhicules","echvehicules"],["c","ch
     const detail=ex.concat(bi).slice(0,3).map(x=>`${esc(x.nom)} — ${esc(x.l)} (${esc(x.e.txt.toLowerCase())})`).join(" · ");
     out.push(`<div class="alert" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between"><span><b>Échéances ${nom} :</b> ${ex.length?ex.length+" dépassée"+(ex.length>1?"s":""):""}${ex.length&&bi.length?", ":""}${bi.length?bi.length+" à renouveler sous "+SEUIL+" jours":""}. ${detail}${ex.length+bi.length>3?"…":""}</span><a class="btn btn-ghost btn-sm" href="#${v}">Voir</a></div>`); });
   return out; };
-function echCell(t,o,k,l){ const d=(o.echeances||{})[k]||""; const e=echEtat(d); const cls={exp:"late",bientot:"",ok:"st-terminee",vide:"st-a_planifier"}[e.k]; const st=e.k==="bientot"?' style="border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)"':"";
-  return `<td><input type="date" class="fin" style="max-width:160px" id="ech_${esc(o.id)}_${k}" data-ech="${t}" data-id="${esc(o.id)}" data-k="${k}" value="${esc(d)}" aria-label="${esc(l)} — ${esc(o.immat||o.nom||"")}"><div style="margin-top:4px"><span class="chip ${cls}"${st}>${e.txt}</span></div></td>`; }
+function echCell(t,o,k,l){ const d0=(o.echeances||{})[k]||""; const d=echOk(d0)?d0:""; const e=echEtat(d); const cls={exp:"late",bientot:"",ok:"st-terminee",vide:"st-a_planifier"}[e.k]; const st=e.k==="bientot"?' style="border-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)"':"";
+  return `<td><input type="date" class="fin" min="2000-01-01" max="2100-12-31" style="max-width:160px" id="ech_${esc(o.id)}_${k}" data-ech="${t}" data-id="${esc(o.id)}" data-k="${k}" value="${esc(d)}" aria-label="${esc(l)} — ${esc(o.immat||o.nom||"")}"><div style="margin-top:4px"><span class="chip ${cls}"${st}>${e.txt}</span></div></td>`; }
 function echView(g){
   const L=echListe(g); const n=k=>L.filter(x=>x.e.k===k).length;
   const kp=`<div class="kpis"><div class="kpi ${n("exp")?"bad":""}"><small>Expirés</small><b class="num">${n("exp")}</b></div><div class="kpi ${n("bientot")?"warn":""}"><small>À renouveler sous ${SEUIL} jours</small><b class="num">${n("bientot")}</b></div><div class="kpi"><small>Valides</small><b class="num">${n("ok")}</b></div><div class="kpi"><small>À renseigner</small><b class="num">${n("vide")}</b></div></div>`;
@@ -687,6 +688,8 @@ document.addEventListener("change", async e=>{
   if(e.target.id==="stSel"){ B.st=e.target.value; render(); return; }
   if(e.target.id==="oPrix" && F.ordre){ const c=S.courses.find(x=>x.id===F.ordre.id); const st=c&&clientById(c.sousTraitantId); if(st){ const m=ordreMsg(c,st,e.target.value.trim()); $("#oTxt").value=m.corps; } return; }
   if(de.ech){ const liste=S[de.ech]; const o=liste&&liste.find(x=>x.id===de.id); if(!o) return;
+    if(e.target.validity&&e.target.validity.badInput) return; // saisie au clavier en cours : on attend la date complète
+    if(e.target.value && !echOk(e.target.value)) return;      // année en cours de frappe (0002, 0020…) : rien n'est enregistré
     const ech=Object.assign({},o.echeances||{}); if(e.target.value) ech[de.k]=e.target.value; else delete ech[de.k];
     const {error}=await sb.from(de.ech).update({echeances:ech}).eq("id",o.id);
     if(error){ toast(/echeances/.test(error.message||"")?"Les échéances ne sont pas encore activées sur cette base.":fErr(error)); e.target.value=(o.echeances||{})[de.k]||""; return; }
