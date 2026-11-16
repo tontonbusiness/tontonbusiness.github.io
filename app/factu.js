@@ -63,7 +63,7 @@ T.nav = () => {
     sub("en_cours","En cours",cnt("en_cours"))+sub("terminee","Terminés",cnt("terminee"))+L("conducteur","Vue conducteur")+
     `<span class="grp">FACTURATION</span>`+L("devis","Devis")+L("factures","Facturation de ventes")+
     subv("afacturer","Transports à facturer",F.ready?aFact().length:0,true)+subv("factures","Factures",nb("facture"))+subv("relances","Relances clients",F.pieces.filter(enRetard).length,true)+subv("avoirs","Avoirs",nb("avoir"))+
-    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("activite","Activité chauffeurs")+L("soustraitants","Sous-traitants")+L("litiges","Litiges",(T.litigesN?T.litigesN():""))+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+subv("echvehicules","Contrôles véhicules",echCompte("v"),true)+subv("echchauffeurs","Documents chauffeurs",echCompte("c"),true)+L("reglages","Paramètres");
+    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("activite","Activité chauffeurs")+L("soustraitants","Sous-traitants")+L("litiges","Litiges",(T.litigesN?T.litigesN():""))+L("stockage","Stockage")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+subv("echvehicules","Contrôles véhicules",echCompte("v"),true)+subv("echchauffeurs","Documents chauffeurs",echCompte("c"),true)+L("reglages","Paramètres");
 };
 
 /* ---------- À FACTURER ---------- */
