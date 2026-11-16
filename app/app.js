@@ -41,6 +41,16 @@ const incOf = c => Array.isArray(c.incidents) ? c.incidents : [];
 const incNew = c => incOf(c).filter(i=>!i.vu);
 const hasBL = c => (c.docs||[]).some(d=>d.type==="bl");
 const DRV_ST = ["envoyee","en_cours","terminee"];
+/* étape d'avancement d'une course, d'après les heures validées par le chauffeur : arrivée enlèvement, chargé, arrivée livraison, livré */
+const ETAPES = { chg:{l:"Au chargement",h:"arriveeEnl"}, route:{l:"En route",h:"chargeEnl"}, liv:{l:"À la livraison",h:"arriveeLiv"} };
+function etape(c){ const st=c.statut||"a_planifier"; if(!DRV_ST.includes(st) || st==="terminee") return st;
+  if(c.livre) return "terminee"; if(c.arriveeLiv) return "liv"; if(c.chargeEnl) return "route"; if(c.arriveeEnl) return "chg"; return st; }
+const etapeLib = c => { const k=etape(c); return (ETAPES[k]||STATUTS[k]||{}).l || k; };
+const FRISE = [["arriveeEnl","Enlèvement","chg"],["chargeEnl","Chargé","route"],["arriveeLiv","Livraison","liv"],["livre","Livré","terminee"]];
+function friseHtml(c){ if(!DRV_ST.includes(c.statut)) return "";
+  const cur = c.livre?3 : c.arriveeLiv?2 : c.chargeEnl?1 : c.arriveeEnl?0 : -1;
+  return `<div class="frise" role="list" aria-label="Avancement de la course">${FRISE.map(([k,l,e],i)=>{ const cl=i<cur||(i===cur&&k==="livre")?"ok":i===cur?"now":"";
+    const col=e==="terminee"?"done":e==="route"?"run":e; return `<div class="fs ${cl}" role="listitem" style="--c:var(--${col}-bd);--cs:var(--${col}-bg)"><span class="pt">${cl==="ok"?"✓":i+1}</span><b>${l}</b><span class="h">${esc(c[k]||"—")}</span></div>`; }).join("")}</div>`; }
 // courses d'un conducteur pour un jour : celles qui s'enlèvent ou se livrent ce jour-là, plus (aujourd'hui) celles des 7 derniers jours pas encore terminées
 function inDay(c,d){ const a=c.enlDate, b=(c.livDate&&c.livDate>=c.enlDate)?c.livDate:c.enlDate; if(!a) return false;
   if(a<=d && d<=b) return true;
@@ -343,7 +353,7 @@ function vPlanning(){
     const ca = mine.reduce((s,c)=>s+(Number(c.prix)||0),0);
     const h = Math.max(62, L.n*44+12);
     const blocks = L.items.map(it=>{ const c=it.c; const other = S.mode==="conducteur" ? vehLabel(c) : [condName(c.conducteurId), c.remorqueId&&isTracteur(c.camionId)?remName(c.remorqueId):""].filter(Boolean).join(" · ");
-      return `<button type="button" class="blk st-${esc(c.statut)} ${it.clash?"clash":""}" data-open="${esc(c.id)}" data-drag="${esc(c.id)}" draggable="true" style="left:${pct(it.a)}%;width:calc(${Math.max(pct(it.b)-pct(it.a),4)}% - 3px);top:${6+it.l*44}px;height:40px" title="${esc(c.donneur)} · ${esc(STATUTS[c.statut]?.l||"")}">
+      return `<button type="button" class="blk st-${esc(etape(c))} ${it.clash?"clash":""}" data-open="${esc(c.id)}" data-drag="${esc(c.id)}" draggable="true" style="left:${pct(it.a)}%;width:calc(${Math.max(pct(it.b)-pct(it.a),4)}% - 3px);top:${6+it.l*44}px;height:40px" title="${esc(c.donneur)} · ${esc(etapeLib(c))}">
         <b>${esc(c.donneur||"Sans client")}${c.statut==="envoyee"&&c.conducteurId&&("vuLe" in c)?(c.vuLe?" · vu":" · non vu"):""}</b><span>↑ ${esc(c.enlHeure||"--:--")} ${esc(c.enlVille||"")} → ↓ ${esc(c.livHeure||"")} ${esc(c.livVille||"")}${other?" · "+esc(other):""}</span></button>`; }).join("");
     const tog = S.mode==="conducteur" && !r.st ? `<button type="button" class="btn btn-ghost btn-sm" data-repos="${esc(r.id)}" style="align-self:flex-start;margin-top:4px">${off?"Remettre au travail":"Mettre en repos"}</button>` : "";
     return `<div class="row ${off?"off":""} ${L.clash?"warn":""}" data-drop="${esc(r.id)}">
@@ -383,7 +393,7 @@ function vPlanning(){
       ${rowsHtml || `<div class="empty">Ajoutez vos ${S.mode==="conducteur"?"conducteurs":"véhicules"} dans <a href="#parametres">Conducteurs & véhicules</a>.</div>`}
     </div></section>
   </div>
-  <div class="legend">${["planifiee","envoyee","en_cours","terminee"].map(s=>`<span><i class="st-${s}"></i>${STATUTS[s].l}</span>`).join("")}<span><i style="border-color:var(--danger)"></i>Alerte</span></div>`;
+  <div class="legend">${[["planifiee","Planifiée"],["envoyee","Envoyée"],["chg","Au chargement"],["route","En route"],["liv","À la livraison"],["terminee","Terminée"]].map(([s,l])=>`<span><i class="st-${s}"></i>${l}</span>`).join("")}<span><i style="border-color:var(--danger)"></i>Alerte</span></div>`;
 }
 function cardHtml(c){
   const m=[c.palettes&&c.palettes+" pal.",c.colis&&c.colis+" colis",c.poids&&Number(c.poids).toLocaleString("fr-FR")+" kg",c.metres&&c.metres+" m"].filter(Boolean).join(" · ");
@@ -466,7 +476,7 @@ function vCourses(){
   const chips=[["tous","Toutes"],["a_planifier","À planifier"],["planifiee","Planifiées"],["envoyee","Envoyées"],["en_cours","En cours"],["terminee","Terminées"],["afacturer","À facturer"],["annulee","Annulées"]]
     .map(([k,l])=>`<button type="button" class="f ${S.fStatut===k?"on":""}" data-fst="${k}">${l} <span class="num">${cnt(k)}</span></button>`).join("");
   const rows=list.slice(0,300).map(c=>{ const m=[c.palettes&&c.palettes+" pal.",c.colis&&c.colis+" colis",c.poids&&Number(c.poids).toLocaleString("fr-FR")+" kg",c.metres&&c.metres+" m"].filter(Boolean).join(", ");
-    return `<tr class="click strow" style="--st-c:var(--${({planifiee:"plan",envoyee:"sent",en_cours:"run",terminee:"done"})[c.statut]||"off"}-bd)" data-open="${esc(c.id)}" tabindex="0"><td>${statChip(c)}</td>
+    return `<tr class="click strow" style="--st-c:var(--${({planifiee:"plan",envoyee:"sent",en_cours:"run",route:"run",chg:"chg",liv:"liv",terminee:"done"})[etape(c)]||"off"}-bd)" data-open="${esc(c.id)}" tabindex="0"><td>${statChip(c)}</td>
     <td><b>${esc(c.donneur||"—")}</b>${c.ref?`<div class="muted">Réf. ${esc(c.ref)}</div>`:""}</td>
     <td>${esc(c.enlNom||"")}<div class="muted">${esc(c.enlCp||"")} ${esc(c.enlVille||"")}</div></td>
     <td class="num">${esc(shortDate(c.enlDate))} ${esc(c.enlHeure||"")}${c.arriveeEnl?`<div class="muted">Réel : ${esc(c.arriveeEnl)}</div>`:""}</td>
@@ -481,7 +491,7 @@ function vCourses(){
    <div class="seg" role="group" aria-label="Période">${[["tout","Toutes dates"],["jour","Aujourd'hui"],["semaine","Cette semaine"]].map(([k,l])=>`<button type="button" class="${S.fPeriode===k?"on":""}" data-fper="${k}">${l}</button>`).join("")}</div></div>
   <div class="panel tbl-wrap">${list.length?`<table><thead><tr><th>Statut</th><th>Donneur d'ordre</th><th>Enlèvement</th><th>Date d'enlèvement</th><th>Livraison</th><th>Date de livraison</th><th>Marchandises</th><th>Conducteur · véhicule</th><th class="r">Prix HT</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">Aucune course pour le moment. Créez une course ou importez une confirmation PDF.</div>`}</div>`;
 }
-function statChip(c){ const st=c.statut||"a_planifier"; let x=`<span class="chip st-${esc(st)}">${esc(STATUTS[st]?.l||st)}</span>`;
+function statChip(c){ const st=c.statut||"a_planifier"; const et=etape(c); let x=`<span class="chip st-${esc(et)}">${esc(etapeLib(c))}</span>`; if(ETAPES[et] && c[ETAPES[et].h]) x+=`<div class="muted" style="font-size:12px;margin-top:3px">depuis ${esc(c[ETAPES[et].h])}</div>`;
   if(c.reserve) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Réserve</span></div>`;
   if(st==="envoyee" && c.conducteurId && ("vuLe" in c)) x+=`<div style="margin-top:4px;font-size:12px;font-weight:600;color:var(--${c.vuLe?"ok":"accent-ink"})">${c.vuLe?"Vue par le chauffeur · "+esc(new Date(c.vuLe).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})):`Pas encore vue <button type="button" class="linkbtn" data-act="relancer" data-id="${esc(c.id)}" style="font-size:12px;margin-left:6px">Relancer</button>`}</div>`;
   if(st==="planifiee" && c.sousTraitantId) x+=`<div class="muted" style="margin-top:4px;font-size:12px">Sous-traitée</div>`;
@@ -514,6 +524,7 @@ function courseForm(c,opts={}){
   const incHtml = incs.length ? `<div class="${incNew(c).length?"alert":""}" style="display:flex;flex-direction:column;gap:6px"><b>Problèmes signalés par le conducteur</b><ul style="margin:0;padding-left:18px">${incs.map(i=>`<li>${esc(i.heure||"")}${i.le?" ("+esc(frDate(String(i.le).slice(0,10),{day:"numeric",month:"short"}))+")":""} · <b style="color:inherit">${esc(INC[i.type]||"Autre")}</b>${i.commentaire?" — "+esc(i.commentaire):""}${i.path?` · <button type="button" class="linkbtn" data-doc="${esc(i.path)}">Voir la photo</button>`:""}${i.vu?` <span class="muted">(traité)</span>`:""}</li>`).join("")}</ul>${incNew(c).length?`<button type="button" class="btn btn-ghost btn-sm" data-act="incvu" style="align-self:flex-start">Marquer comme traité</button>`:""}</div>` : "";
   const sigHtml = c.signataire ? `<div><b>Livraison signée par :</b> ${esc(c.signataire)}</div>` : "";
   return `<h2>${opts.title||"Course"}</h2>
+  ${opts.draft?"":friseHtml(c)}
   ${opts.note?`<div class="banner">${opts.note}</div>`:""}
   <form id="cForm" style="display:flex;flex-direction:column;gap:14px">
   <fieldset><legend>Donneur d'ordre</legend>${grp("d")}</fieldset>

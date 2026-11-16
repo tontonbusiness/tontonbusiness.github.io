@@ -25,6 +25,7 @@ body{margin:0}
   --navy:#1F3A5F; --accent:#F28C28; --accent-ink:#A9520A; --accent-soft:#FFF1E3; --on-accent:#1B2430;
   --plan-bg:#EEE8FB; --plan-bd:#6B4FC4; --sent-bg:#FFF1E3; --sent-bd:#F28C28;
   --run-bg:#DCEBFA; --run-bd:#2563A8; --done-bg:#E2F1E7; --done-bd:#2E7D4F; --off-bg:#EEF1F5; --off-bd:#8C96A3;
+  --chg-bg:#D9F1F2; --chg-bd:#1B8A99; --liv-bg:#FBE3EE; --liv-bd:#B8326F;
   --danger:#B93A0E; --danger-soft:#FDE3D7; --ok:#24683F;
   --display:"Archivo",Arial,sans-serif; --text:"Inter",Arial,sans-serif;
   --r:12px;
@@ -35,6 +36,7 @@ body{margin:0}
   --navy:#9DBBE0; --accent:#F59A3E; --accent-ink:#F7B36B; --accent-soft:#3A2A18; --on-accent:#1B2430;
   --plan-bg:#2A2344; --plan-bd:#B79CF2; --sent-bg:#3A2A18; --sent-bd:#F59A3E;
   --run-bg:#16314F; --run-bd:#6AA5E6; --done-bg:#16352A; --done-bd:#5DBB85; --off-bg:#1D2938; --off-bd:#6B7787;
+  --chg-bg:#12383D; --chg-bd:#5CC4D2; --liv-bg:#3E1B2D; --liv-bd:#F08DB8;
   --danger:#F08A6A; --danger-soft:#3D2018; --ok:#6CC795; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0E1520; --surface:#16202D; --surface-2:#1D2938; --line:#2B3A4D; --fg:#E6ECF3; --muted:#9AA8B8;
@@ -42,6 +44,7 @@ body{margin:0}
   --navy:#9DBBE0; --accent:#F59A3E; --accent-ink:#F7B36B; --accent-soft:#3A2A18; --on-accent:#1B2430;
   --plan-bg:#2A2344; --plan-bd:#B79CF2; --sent-bg:#3A2A18; --sent-bd:#F59A3E;
   --run-bg:#16314F; --run-bd:#6AA5E6; --done-bg:#16352A; --done-bd:#5DBB85; --off-bg:#1D2938; --off-bd:#6B7787;
+  --chg-bg:#12383D; --chg-bd:#5CC4D2; --liv-bg:#3E1B2D; --liv-bd:#F08DB8;
   --danger:#F08A6A; --danger-soft:#3D2018; --ok:#6CC795; color-scheme:dark}
 *{box-sizing:border-box}
 html,body{min-height:100%}
@@ -128,6 +131,21 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .st-envoyee{background:var(--sent-bg);border-color:var(--sent-bd)}
 .st-en_cours{background:var(--run-bg);border-color:var(--run-bd)}
 .st-terminee{background:var(--done-bg);border-color:var(--done-bd)}
+.st-chg{background:var(--chg-bg);border-color:var(--chg-bd)}
+.st-route{background:var(--run-bg);border-color:var(--run-bd)}
+.st-liv{background:var(--liv-bg);border-color:var(--liv-bd)}
+/* frise d'avancement d'une course : enlèvement, chargé, livraison, livré */
+.frise{display:flex;gap:0;align-items:flex-start;margin:4px 0 2px}
+.frise .fs{flex:1;min-width:0;text-align:center;position:relative;font-size:12px;color:var(--muted)}
+.frise .fs::before{content:"";position:absolute;top:11px;left:-50%;width:100%;height:3px;background:var(--line);z-index:0}
+.frise .fs:first-child::before{display:none}
+.frise .fs.ok::before,.frise .fs.now::before{background:var(--c)}
+.frise .pt{position:relative;z-index:1;width:24px;height:24px;border-radius:50%;margin:0 auto 4px;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--surface);border:2px solid var(--line);color:var(--muted)}
+.frise .fs.ok .pt{background:var(--c);border-color:var(--c);color:var(--surface)}
+.frise .fs.now .pt{border-color:var(--c);color:var(--c);box-shadow:0 0 0 4px var(--cs)}
+.frise .fs.now b,.frise .fs.ok b{color:var(--fg)}
+.frise b{display:block;font-weight:600;font-size:12px}
+.frise .h{display:block;font-variant-numeric:tabular-nums}
 .st-annulee{background:var(--off-bg);border-color:var(--off-bd);opacity:.7}
 .chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;border:1px solid;white-space:nowrap}
 .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted)}
@@ -291,7 +309,7 @@ button,a,label,[role=button],.btn,.card,.blk,tr.click{touch-action:manipulation}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=17"></script>
+<script src="app.js?v=18"></script>
 <script src="factu.js?v=15"></script>
 <script src="litiges.js?v=1"></script>
 </body>
