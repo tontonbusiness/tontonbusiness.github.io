@@ -1,6 +1,6 @@
 {
-  "name": "Tonton Planning",
-  "short_name": "Planning",
+  "name": "Dashlog",
+  "short_name": "Dashlog",
   "description": "Planning des courses et vue conducteur",
   "start_url": "./",
   "scope": "./",
