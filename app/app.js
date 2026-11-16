@@ -176,7 +176,7 @@ const aFacturer = c => c.statut==="terminee" && !c.facturee;
 
 /* ---------- navigation ---------- */
 const VIEWS = ["planning","courses","indicateurs","conducteur","parametres"];
-function readHash(){ const h=(location.hash||"").replace("#",""); const mc=/^course=([\w-]{1,64})$/.exec(h); if(mc && MODE==="chauffeur"){ S.ouvrir=mc[1]; history.replaceState(null,"",location.pathname+location.search); } S.view = (VIEWS.includes(h)||X.views[h])?h:"planning"; if(MODE==="chauffeur" || (S.mem && !isStaff())) S.view="conducteur"; }
+function readHash(){ const h=(location.hash||"").replace("#",""); const mc=/^course=([\w-]{1,64})$/.exec(h); if(mc && MODE==="chauffeur"){ S.ouvrir=mc[1]; history.replaceState(null,"",location.pathname+location.search); } S.view = (VIEWS.includes(h)||X.views[h])?h:(MODE==="chauffeur"?"planning":"indicateurs"); if(MODE==="chauffeur" || (S.mem && !isStaff())) S.view="conducteur"; }
 window.addEventListener("hashchange",()=>{ readHash(); render(); window.scrollTo(0,0); });
 
 function renderNav(){
@@ -1022,7 +1022,7 @@ async function showAcces(condId, regen){
 }
 
 /* ---------- clics globaux ---------- */
-function allerAccueil(){ closeModal(); S.date=todayIso(); const h=(location.hash||"").replace("#",""); if(h && h!=="planning"){ location.hash="planning"; } else { S.view="planning"; render(); window.scrollTo(0,0); } }
+function allerAccueil(){ closeModal(); S.date=todayIso(); const h=(location.hash||"").replace("#",""); if(h!=="indicateurs"){ location.hash="indicateurs"; } else { S.view="indicateurs"; render(); window.scrollTo(0,0); } }
 document.addEventListener("keydown",e=>{ if((e.key==="Enter"||e.key===" ") && e.target.matches && e.target.matches("[data-home]")){ e.preventDefault(); allerAccueil(); } });
 document.addEventListener("click",async e=>{
   if(e.target.closest && e.target.closest("[data-home]")){ allerAccueil(); return; }
