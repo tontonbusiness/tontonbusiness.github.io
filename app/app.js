@@ -38,6 +38,21 @@ const S = { session:null, mem:null, entreprise:null, courses:[], conducteurs:[],
 const INC = { retard:"Retard", attente:"Attente sur site", absent:"Client absent", casse:"Casse / manquant", acces:"Accès impossible", panne:"Panne véhicule", autre:"Autre" };
 const packOn = () => S.courses.some(c=>"incidents" in c); // base de données à jour (signalement + signature)
 const incOf = c => Array.isArray(c.incidents) ? c.incidents : [];
+const ATT_MIN = 30;
+const attDt = (d,h) => { if(!h) return null; const t=new Date((d||todayIso())+"T"+String(h).slice(0,5)+":00"); return isNaN(t)?null:t; };
+const attente = c => { if(!c || c.livre || c.sousTraitantId || ["annulee","terminee","a_planifier"].includes(c.statut)) return null;
+  const e = c.arriveeLiv ? {k:"liv",l:"à la livraison",since:attDt(c.livDate||c.enlDate,c.arriveeLiv),nom:c.livNom} : (c.arriveeEnl && !c.chargeEnl) ? {k:"chg",l:"au chargement",since:attDt(c.enlDate,c.arriveeEnl),nom:c.enlNom} : null;
+  if(!e || !e.since) return null; const m=Math.floor((Date.now()-e.since.getTime())/60000); return (m<ATT_MIN || m>18*60) ? null : {...e,min:m}; };
+const attListe = () => S.courses.map(c=>({c,a:attente(c)})).filter(x=>x.a);
+const attDuree = m => m>=60 ? Math.floor(m/60)+" h "+String(m%60).padStart(2,"0") : m+" min";
+const attTexte = ({c,a}) => `${condName(c.conducteurId)||"Conducteur"} est ${a.l} chez ${a.nom||c.donneur||"le client"} depuis ${attDuree(a.min)}, sans avancement`;
+let attTimer=null;
+function attCheck(){ if(!isStaff()) return; const L=attListe(); let vu={}; try{ vu=JSON.parse(localStorage.mobilogAttVu||"{}"); }catch(e){}
+  const now=Date.now(); Object.keys(vu).forEach(k=>{ if(now-vu[k]>864e5) delete vu[k]; });
+  const nouv=L.filter(x=>!vu[x.c.id+":"+x.a.k]);
+  nouv.forEach(x=>{ vu[x.c.id+":"+x.a.k]=now; }); try{ localStorage.mobilogAttVu=JSON.stringify(vu); }catch(e){}
+  if(nouv.length){ const x=nouv[0]; toastAct(`<span><b>Attente :</b> ${esc(attTexte(x))}${nouv.length>1?" (+"+(nouv.length-1)+" autre"+(nouv.length>2?"s":"")+")":""}</span> <button type="button" class="btn btn-ghost btn-sm" data-open="${esc(x.c.id)}">Ouvrir</button>`,20000); }
+  if(!$("#mbg")){ if(S.view==="planning") render(); else renderNav(); } }
 const incNew = c => incOf(c).filter(i=>!i.vu);
 const hasBL = c => (c.docs||[]).some(d=>d.type==="bl");
 const DRV_ST = ["envoyee","en_cours","terminee"];
@@ -209,7 +224,7 @@ function render(){
 }
 const after = {};
 /* points d'accroche pour les modules complémentaires (facturation, carnet d'adresses…) */
-const X = { catVeh, CAT_LIB, CAT_ORDRE, cmpTxt, views:{}, nav:null, onData:[], after, S, sb, $, esc, toast, errMsg, openModal, closeModal, render, loadData, EID, isStaff, frDate, todayIso, addDays };
+const X = { attN:()=>attListe().length, attCheck:()=>attCheck(), catVeh, CAT_LIB, CAT_ORDRE, cmpTxt, views:{}, nav:null, onData:[], after, S, sb, $, esc, toast, errMsg, openModal, closeModal, render, loadData, EID, isStaff, frDate, todayIso, addDays };
 
 /* ---------- CONNEXION ---------- */
 function authShell(inner){ const img = MODE==="chauffeur" ? `<img src="icon-192.png" alt="" style="border-radius:12px">` : `<img src="../logo-blanc.png" alt="Mobilog">`;
@@ -343,6 +358,7 @@ function vPlanning(){
   const conds = activeConds(), cams = activeCams();
   const rowsSrc = S.mode==="conducteur" ? conds.concat(X.planRows?X.planRows():[]) : cams;
   const alerts=[];
+  attListe().forEach(x=>alerts.push(`<div class="alert" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between"><span><b>Attente ${esc(x.a.l)} :</b> ${esc(attTexte(x))}</span><button type="button" class="btn btn-ghost btn-sm" data-open="${esc(x.c.id)}">Ouvrir</button></div>`));
   if(X.planAlerts) alerts.push(...X.planAlerts());
   S.courses.filter(c=>incNew(c).length).slice(0,8).forEach(c=>incNew(c).forEach(i=>alerts.push(`<div class="alert" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between"><span><b>Problème signalé${i.heure?" à "+esc(i.heure):""} :</b> ${esc(INC[i.type]||"Autre")} — ${esc(condById(c.conducteurId)?.nom||"Conducteur")} · ${esc(c.donneur||"")}${i.commentaire?" — "+esc(i.commentaire):""}</span><button type="button" class="btn btn-ghost btn-sm" data-open="${esc(c.id)}">Ouvrir la course</button></div>`)));
   const rowsHtml = rowsSrc.map(r=>{
@@ -1100,7 +1116,7 @@ async function boot(){
     const {data,error}=await sb.from("membres").select("entreprise_id,role,conducteur_id").eq("user_id",session.user.id).limit(1);
     if(!error && data && data[0]){ S.mem=data[0];
       const {data:ent}=await sb.from("entreprises").select("id,nom").eq("id",S.mem.entreprise_id).single(); S.entreprise=ent||{nom:""};
-      readHash(); render(); signaler(); await loadData(); subscribe(); pushSync(); return; }
+      readHash(); render(); signaler(); await loadData(); subscribe(); pushSync(); if(isStaff()){ attCheck(); clearInterval(attTimer); attTimer=setInterval(attCheck,60000); } return; }
   }
   render();
 }
