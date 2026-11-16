@@ -59,6 +59,7 @@ const NAVIC = {"planning": ["#5aa9ff", "<rect x=\"4\" y=\"5\" width=\"16\" heigh
   const L = (v,label,extra) => `<a href="#${v}" class="${S.view===v?"on":""}"><span class="ni">${icn(v)}${label}</span>${extra||""}</a>`;
   const sub = (st,label,n,hot) => `<a href="#courses" class="sub ${S.view==="courses"&&S.fStatut===st?"on-st":""}" data-fst="${st}"><span style="display:flex;align-items:center"><span class="pst" style="background:var(--dot-${st})" aria-hidden="true"></span>${label}</span><span class="cnt ${hot&&n?"hot":""}">${n}</span></a>`;
   const subv = (v,label,n,hot) => `<a href="#${v}" class="sub" ${S.view===v?'style="color:var(--side-fg);font-weight:700"':""}>${label}${n===undefined?"":`<span class="cnt ${hot&&n?"hot":""}">${n}</span>`}</a>`;
+  const ouvV = ["parametres","echvehicules","echchauffeurs"].includes(S.view);
   const ouvF = ["factures","afacturer","relances","avoirs"].includes(S.view);
   const chev = o => `<svg class="chev${o?" open":""}" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>`;
   const nb = (t,st) => F.pieces.filter(p=>p.type===t && (!st||p.statut===st)).length;
@@ -67,7 +68,7 @@ const NAVIC = {"planning": ["#5aa9ff", "<rect x=\"4\" y=\"5\" width=\"16\" heigh
     sub("en_cours","En cours",cnt("en_cours"))+sub("terminee","Terminés",cnt("terminee"))+L("conducteur","Vue conducteur")+
     `<span class="grp">FACTURATION</span>`+L("devis","Devis")+L("factures","Facturation de ventes",chev(ouvF))+
     (ouvF?`<div class="subgrp">`+subv("afacturer","Transports à facturer",F.ready?aFact().length:0,true)+subv("factures","Factures",nb("facture"))+subv("relances","Relances clients",F.pieces.filter(enRetard).length,true)+subv("avoirs","Avoirs",nb("avoir"))+`</div>`:"")+
-    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("activite","Activité chauffeurs")+L("soustraitants","Sous-traitants")+L("litiges","Litiges",(T.litigesN?T.litigesN():""))+L("stockage","Stockage")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+subv("echvehicules","Contrôles véhicules",echCompte("v"),true)+subv("echchauffeurs","Documents chauffeurs",echCompte("c"),true)+L("reglages","Paramètres");
+    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("activite","Activité chauffeurs")+L("soustraitants","Sous-traitants")+L("litiges","Litiges",(T.litigesN?T.litigesN():""))+L("stockage","Stockage")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules",(!ouvV&&(echCompte("v")+echCompte("c"))?`<span class="cnt hot">${echCompte("v")+echCompte("c")}</span>`:"")+chev(ouvV))+(ouvV?`<div class="subgrp">`+subv("echvehicules","Contrôles véhicules",echCompte("v"),true)+subv("echchauffeurs","Documents chauffeurs",echCompte("c"),true)+`</div>`:"")+L("reglages","Paramètres");
 };
 
 /* ---------- À FACTURER ---------- */
