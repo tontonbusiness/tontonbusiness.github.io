@@ -63,7 +63,7 @@ T.nav = () => {
     sub("en_cours","En cours",cnt("en_cours"))+sub("terminee","Terminés",cnt("terminee"))+L("conducteur","Vue conducteur")+
     `<span class="grp">FACTURATION</span>`+L("devis","Devis")+L("factures","Facturation de ventes")+
     subv("afacturer","Transports à facturer",F.ready?aFact().length:0,true)+subv("factures","Factures",nb("facture"))+subv("relances","Relances clients",F.pieces.filter(enRetard).length,true)+subv("avoirs","Avoirs",nb("avoir"))+
-    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("activite","Activité chauffeurs")+L("soustraitants","Sous-traitants")+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+subv("echvehicules","Contrôles véhicules",echCompte("v"),true)+subv("echchauffeurs","Documents chauffeurs",echCompte("c"),true)+L("reglages","Paramètres");
+    `<span class="grp">OUTILS ET GESTION</span>`+L("indicateurs","Rapports")+L("activite","Activité chauffeurs")+L("soustraitants","Sous-traitants")+L("litiges","Litiges",(T.litigesN?T.litigesN():""))+L("clients","Carnet d'adresses")+L("parametres","Conducteurs et véhicules")+subv("echvehicules","Contrôles véhicules",echCompte("v"),true)+subv("echchauffeurs","Documents chauffeurs",echCompte("c"),true)+L("reglages","Paramètres");
 };
 
 /* ---------- À FACTURER ---------- */
@@ -101,7 +101,7 @@ async function mkFacture(el){
   el.disabled=true; if(!(await factureTransports(cs, el.dataset.donneur))) el.disabled=false;
 }
 /* accès depuis la fiche d'un transport */
-T.courseExtra = c => suiviBloc(c) + stBloc(c) + kmBloc(c) + carteBloc(c) + coutBloc(c) + factBloc(c);
+T.courseExtra = c => suiviBloc(c) + stBloc(c) + kmBloc(c) + carteBloc(c) + coutBloc(c) + factBloc(c) + (T.litigeBloc?T.litigeBloc(c):"");
 const dh = t => t ? new Date(t).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}) : "";
 /* ---------- suivi de l'envoi : envoyée, vue par le chauffeur ---------- */
 const suiviBloc = c => { if(!("vuLe" in c) || !c.conducteurId || !["envoyee","en_cours","terminee"].includes(c.statut)) return "";
@@ -705,5 +705,6 @@ document.addEventListener("change", async e=>{
 });
 document.addEventListener("submit", e=>{ if(e.target.id==="cliForm"){ e.preventDefault(); saveClient(); } });
 document.addEventListener("keydown", e=>{ if(e.key==="Enter" && e.target.matches && e.target.matches("tr[data-f]")) e.target.click(); });
+T.fx = { ready:()=>F.ready, clients:()=>F.clients, clientById, clientByName, newPiece, totals, tvaDef, fErr, openPiece, load };
 window.addEventListener("afterprint", ()=>{ const z=$("#printzone"); if(z) z.innerHTML=""; });
 })();
