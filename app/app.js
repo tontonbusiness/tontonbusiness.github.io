@@ -30,7 +30,7 @@ const TIME_KEYS = ["enlHeure","enlHeureFin","livHeure","livHeureFin","arriveeEnl
 
 /* ---------- état ---------- */
 const S = { session:null, mem:null, entreprise:null, courses:[], conducteurs:[], camions:[], remorques:[], membres:[], loaded:false,
-  view:"planning", date: todayIso(), mode:"conducteur", fStatut:"tous", fQ:"", fPeriode:"tout", fDate:"",
+  view:"planning", date: todayIso(), mode:"conducteur", fStatut:"tous", fQ:"", fPeriode:"tout", fDate:"", fDate2:"",
   iPeriode:"30", iCond:"", iDonneur:"", me: store.get("tp_me") || "", drvDay:"today", reserveFor:null,
   importList:null, importDoc:null, authMode:"login", authErr:"", recovery:false,
   openJobs:new Set(), doneFor:null, sign:null, incType:null, incN:null };
@@ -500,14 +500,21 @@ async function sendPlanning(){
 }
 
 /* ---------- COURSES ---------- */
-document.addEventListener("click",e=>{ const j=e.target.closest("[data-fdj],[data-fdclr]"); if(!j || S.view!=="courses") return;
-  if(j.dataset.fdclr){ S.fDate=""; } else { let d=S.fDate||todayIso(); S.fDate=addDays(d,Number(j.dataset.fdj)); S.fPeriode="tout"; }
+document.addEventListener("click",e=>{ const j=e.target.closest("[data-fdj],[data-fdclr],[data-fdr]"); if(!j || S.view!=="courses") return;
+  const iso=d=>{ const x=new Date(d.getTime()-d.getTimezoneOffset()*60000); return x.toISOString().slice(0,10); };
+  if(j.dataset.fdr){ const n=new Date(); let a,b;
+    if(j.dataset.fdr==="mois"){ a=new Date(n.getFullYear(),n.getMonth(),1); b=new Date(n.getFullYear(),n.getMonth()+1,0); }
+    else if(j.dataset.fdr==="mois1"){ a=new Date(n.getFullYear(),n.getMonth()-1,1); b=new Date(n.getFullYear(),n.getMonth(),0); }
+    else { b=n; a=new Date(n.getFullYear(),n.getMonth(),n.getDate()-6); }
+    S.fDate=iso(a); S.fDate2=iso(b); S.fPeriode="tout"; }
+  else if(j.dataset.fdclr){ S.fDate=""; S.fDate2=""; } else { let d=S.fDate||todayIso(); S.fDate=addDays(d,Number(j.dataset.fdj)); S.fPeriode="tout"; }
   render(); });
 function vCourses(){
   const q=S.fQ.trim().toLowerCase(); const t=todayIso();
   let list=S.courses.slice();
   if(S.fStatut==="afacturer") list=list.filter(aFacturer); else if(S.fStatut!=="tous") list=list.filter(c=>c.statut===S.fStatut);
-  if(S.fDate) list=list.filter(c=>c.enlDate===S.fDate || (c.livDate||c.enlDate)===S.fDate);
+  if(S.fDate){ const a=S.fDate, b=(S.fDate2&&S.fDate2>=S.fDate)?S.fDate2:S.fDate;
+    list=list.filter(c=>{ const e=c.enlDate||"", l=c.livDate||c.enlDate||""; return (e>=a&&e<=b)||(l>=a&&l<=b); }); }
   if(S.fPeriode==="jour") list=list.filter(c=>c.enlDate===t);
   if(S.fPeriode==="semaine"){ const a=addDays(t,-((new Date().getDay()+6)%7)), b=addDays(a,6); list=list.filter(c=>c.enlDate>=a&&c.enlDate<=b); }
   if(q) list=list.filter(c=>[c.donneur,c.ref,c.enlVille,c.livVille,c.enlNom,c.livNom,condName(c.conducteurId),camName(c.camionId),remName(c.remorqueId),c.marchandise].join(" ").toLowerCase().includes(q));
@@ -529,10 +536,18 @@ function vCourses(){
   <div class="filters">${chips}</div>
   <div class="filters"><label style="flex:1 1 260px"><span style="position:absolute;left:-9999px">Rechercher</span><input type="search" id="fQ" placeholder="Rechercher : client, ville, référence, conducteur…" value="${esc(S.fQ)}"></label>
    <div class="seg" role="group" aria-label="Période">${[["tout","Toutes dates"],["jour","Aujourd'hui"],["semaine","Cette semaine"]].map(([k,l])=>`<button type="button" class="${S.fPeriode===k&&!S.fDate?"on":""}" data-fper="${k}">${l}</button>`).join("")}</div>
-   <div style="display:flex;gap:6px;align-items:center" role="group" aria-label="Choisir une date"><button type="button" class="btn btn-ghost btn-sm" data-fdj="-1" aria-label="Jour précédent">‹</button><input type="date" id="fDate" value="${esc(S.fDate)}" aria-label="Date des courses" style="width:auto"><button type="button" class="btn btn-ghost btn-sm" data-fdj="1" aria-label="Jour suivant">›</button>${S.fDate?`<button type="button" class="btn btn-ghost btn-sm" data-fdclr="1">Effacer la date</button>`:""}</div></div>
-  ${S.fDate?(()=>{ const act=list.filter(c=>c.statut!=="annulee"); const ne=act.filter(c=>c.enlDate===S.fDate).length, nl=act.filter(c=>(c.livDate||c.enlDate)===S.fDate).length, tot=act.reduce((x,c)=>x+(Number(c.prix)||0),0);
-     return `<div class="banner" role="status"><span><b>${esc(frDate(S.fDate,{weekday:"long",day:"numeric",month:"long",year:"numeric"}))}</b> : ${act.length} course${act.length>1?"s":""} (${ne} enlèvement${ne>1?"s":""}, ${nl} livraison${nl>1?"s":""}) · ${eur(tot)} HT</span></div>`; })():""}
-  <div class="panel tbl-wrap">${list.length?`<table><thead><tr><th>Statut</th><th>Donneur d'ordre</th><th>Enlèvement</th><th>Date d'enlèvement</th><th>Livraison</th><th>Date de livraison</th><th>Marchandises</th><th>Conducteur · véhicule</th><th class="r">Prix HT</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">${S.fDate?"Aucune course (enlèvement ou livraison) à cette date.":"Aucune course pour le moment. Créez une course ou importez une confirmation PDF."}</div>`}</div>`;
+   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap" role="group" aria-label="Choisir des dates">
+     ${S.fDate&&!S.fDate2?`<button type="button" class="btn btn-ghost btn-sm" data-fdj="-1" aria-label="Jour précédent">‹</button>`:""}
+     <label style="display:flex;gap:6px;align-items:center">Du<input type="date" id="fDate" value="${esc(S.fDate)}" style="width:auto"></label>
+     ${S.fDate&&!S.fDate2?`<button type="button" class="btn btn-ghost btn-sm" data-fdj="1" aria-label="Jour suivant">›</button>`:""}
+     <label style="display:flex;gap:6px;align-items:center">au<input type="date" id="fDate2" value="${esc(S.fDate2)}" style="width:auto"></label>
+     <button type="button" class="btn btn-ghost btn-sm" data-fdr="mois">Ce mois-ci</button><button type="button" class="btn btn-ghost btn-sm" data-fdr="mois1">Mois dernier</button><button type="button" class="btn btn-ghost btn-sm" data-fdr="7j">7 derniers jours</button>
+     ${S.fDate?`<button type="button" class="btn btn-ghost btn-sm" data-fdclr="1">Effacer les dates</button>`:""}</div></div>
+  ${S.fDate?(()=>{ const a=S.fDate, b=(S.fDate2&&S.fDate2>=S.fDate)?S.fDate2:S.fDate; const act=list.filter(c=>c.statut!=="annulee");
+     const ne=act.filter(c=>c.enlDate>=a&&c.enlDate<=b).length, nl=act.filter(c=>{ const l=c.livDate||c.enlDate||""; return l>=a&&l<=b; }).length, tot=act.reduce((x,c)=>x+(Number(c.prix)||0),0);
+     const lib = a===b ? frDate(a,{weekday:"long",day:"numeric",month:"long",year:"numeric"}) : "du "+frDate(a,{day:"numeric",month:"long",year:"numeric"})+" au "+frDate(b,{day:"numeric",month:"long",year:"numeric"});
+     return `<div class="banner" role="status"><span><b>${esc(lib)}</b> : ${act.length} course${act.length>1?"s":""} (${ne} enlèvement${ne>1?"s":""}, ${nl} livraison${nl>1?"s":""}) · ${eur(tot)} HT</span></div>`; })():""}
+  <div class="panel tbl-wrap">${list.length?`<table><thead><tr><th>Statut</th><th>Donneur d'ordre</th><th>Enlèvement</th><th>Date d'enlèvement</th><th>Livraison</th><th>Date de livraison</th><th>Marchandises</th><th>Conducteur · véhicule</th><th class="r">Prix HT</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">${S.fDate?"Aucune course (enlèvement ou livraison) sur cette période.":"Aucune course pour le moment. Créez une course ou importez une confirmation PDF."}</div>`}</div>`;
 }
 function statChip(c){ const st=c.statut||"a_planifier"; const et=etape(c); let x=`<span class="chip st-${esc(et)}">${esc(etapeLib(c))}</span>`; if(ETAPES[et] && c[ETAPES[et].h]) x+=`<div class="muted" style="font-size:12px;margin-top:3px">depuis ${esc(c[ETAPES[et].h])}</div>`;
   if(c.reserve) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Réserve</span></div>`;
@@ -542,7 +557,9 @@ function statChip(c){ const st=c.statut||"a_planifier"; const et=etape(c); let x
   if(incNew(c).length) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Problème signalé</span></div>`;
   if(c.modifieApresEnvoi && st==="envoyee") x+=`<div class="muted" style="font-size:11px;margin-top:3px">Modifiée après envoi</div>`;
   return x; }
-after.courses = ()=>{ const fd=$("#fDate"); if(fd) fd.addEventListener("change",()=>{ S.fDate=/^\d{4}-\d{2}-\d{2}$/.test(fd.value)?fd.value:""; if(S.fDate) S.fPeriode="tout"; render(); }); const q=$("#fQ"); if(q){ q.addEventListener("input",()=>{ S.fQ=q.value; const pos=q.selectionStart; render(); const n=$("#fQ"); n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} }); }
+after.courses = ()=>{ const okD=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)?v:""; const fd=$("#fDate"), fd2=$("#fDate2");
+  if(fd) fd.addEventListener("change",()=>{ S.fDate=okD(fd.value); if(!S.fDate) S.fDate2=""; else S.fPeriode="tout"; render(); });
+  if(fd2) fd2.addEventListener("change",()=>{ const v=okD(fd2.value); S.fDate2=v; if(v){ S.fPeriode="tout"; if(!S.fDate) S.fDate=v; else if(v<S.fDate){ S.fDate2=S.fDate; S.fDate=v; } } render(); }); const q=$("#fQ"); if(q){ q.addEventListener("input",()=>{ S.fQ=q.value; const pos=q.selectionStart; render(); const n=$("#fQ"); n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} }); }
   document.querySelectorAll("tr[data-open]").forEach(tr=>tr.addEventListener("keydown",e=>{ if(e.key==="Enter") openCourse(tr.dataset.open); })); };
 
 /* ---------- FORMULAIRE COURSE ---------- */
@@ -1140,7 +1157,7 @@ document.addEventListener("click",async e=>{
   else if(d.mode){ S.mode=d.mode; render(); }
   else if(d.repos){ const k=condById(d.repos); if(!k) return; const r=new Set(k.repos||[]); r.has(S.date)?r.delete(S.date):r.add(S.date); await tableWrite("conducteurs","update",k.id,{repos:[...r].filter(x=>x>=addDays(todayIso(),-60))}); }
   else if(d.fst){ S.fStatut=d.fst; if(S.view!=="courses") location.hash="courses"; else render(); }
-  else if(d.fper){ S.fPeriode=d.fper; S.fDate=""; render(); }
+  else if(d.fper){ S.fPeriode=d.fper; S.fDate=""; S.fDate2=""; render(); }
   else if(d.drv){ drvAction(d.drv,d.id,el); }
   else if(d.dday){ S.drvDay=d.dday; if($("#modal").innerHTML) closeModal(); render(); window.scrollTo(0,0); }
   else if(d.inctype){ S.incType=d.inctype; document.querySelectorAll("[data-inctype]").forEach(b=>{ const on=b.dataset.inctype===S.incType; b.setAttribute("aria-checked",on?"true":"false"); b.classList.toggle("btn-navy",on); b.classList.toggle("btn-ghost",!on); }); }
