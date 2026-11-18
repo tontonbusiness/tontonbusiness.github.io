@@ -123,8 +123,24 @@ async function loadData(){
   if(isStaff()){ const pa=await sb.rpc("push_actifs",{p_entreprise:eid}); S.pushActifs = pa.error ? null : new Set((pa.data||[]).map(x=>typeof x==="string"?x:Object.values(x)[0])); }
   if(isStaff()) for(const f of X.onData){ try{ await f(); }catch(e){ console.error(e); } }
   if(S.mem.role==="conducteur" && !bad) detecterNouvelles(); // jamais sur un chargement en erreur : il ferait croire que tout est nouveau
-  S.loaded=true; render();
+  const dejaCharge=S.loaded; S.loaded=true;
+  if(dejaCharge && saisieEnCours()){ renduEnAttente=true; return; } // on ne redessine pas sous les doigts de l'utilisateur
+  render();
 }
+/* une saisie non enregistrée (champ actif ou modifié) ne doit jamais être effacée par un rechargement en arrière-plan */
+let renduEnAttente=false;
+function saisieEnCours(){
+  try{
+    const a=document.activeElement;
+    const zone=e=>e && e.closest && e.closest("#view,#modal");
+    if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && zone(a)) return true;
+    return [...document.querySelectorAll("#view input,#view textarea,#modal input,#modal textarea")].some(i=>{
+      if(i.type==="hidden"||i.type==="button"||i.type==="submit") return false;
+      if(i.type==="checkbox"||i.type==="radio") return i.checked!==i.defaultChecked;
+      return i.value!==i.defaultValue; });
+  }catch(e){ return false; }
+}
+document.addEventListener("focusout",()=>{ setTimeout(()=>{ if(renduEnAttente && !saisieEnCours()){ renduEnAttente=false; render(); } },400); });
 /* ---------- conducteur : notification d'une nouvelle course reçue ---------- */
 const vuesMem = {};
 function lireVues(k){ const raw=store.get(k); if(raw!==null){ try{ return new Set(JSON.parse(raw)); }catch(e){ return new Set(); } } return vuesMem[k] ? new Set(vuesMem[k]) : null; }
@@ -212,6 +228,7 @@ function renderNav(){
 }
 
 function render(){
+  renduEnAttente=false;
   const v=$("#view");
   if(MODE==="chauffeur" && !S.recovery && (!S.session || !S.mem)){ $("#side").hidden=true; v.innerHTML=vCodeEntry(); return; }
   if(S.recovery || !S.session || !S.mem){ $("#side").hidden=true; v.innerHTML = S.recovery ? vRecovery() : (!S.session ? vAuth() : vOnboard()); return; }
