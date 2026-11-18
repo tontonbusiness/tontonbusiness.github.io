@@ -30,7 +30,7 @@ const TIME_KEYS = ["enlHeure","enlHeureFin","livHeure","livHeureFin","arriveeEnl
 
 /* ---------- état ---------- */
 const S = { session:null, mem:null, entreprise:null, courses:[], conducteurs:[], camions:[], remorques:[], membres:[], loaded:false,
-  view:"planning", date: todayIso(), mode:"conducteur", fStatut:"tous", fQ:"", fPeriode:"tout",
+  view:"planning", date: todayIso(), mode:"conducteur", fStatut:"tous", fQ:"", fPeriode:"tout", fDate:"",
   iPeriode:"30", iCond:"", iDonneur:"", me: store.get("tp_me") || "", drvDay:"today", reserveFor:null,
   importList:null, importDoc:null, authMode:"login", authErr:"", recovery:false,
   openJobs:new Set(), doneFor:null, sign:null, incType:null, incN:null };
@@ -500,10 +500,14 @@ async function sendPlanning(){
 }
 
 /* ---------- COURSES ---------- */
+document.addEventListener("click",e=>{ const j=e.target.closest("[data-fdj],[data-fdclr]"); if(!j || S.view!=="courses") return;
+  if(j.dataset.fdclr){ S.fDate=""; } else { let d=S.fDate||todayIso(); S.fDate=addDays(d,Number(j.dataset.fdj)); S.fPeriode="tout"; }
+  render(); });
 function vCourses(){
   const q=S.fQ.trim().toLowerCase(); const t=todayIso();
   let list=S.courses.slice();
   if(S.fStatut==="afacturer") list=list.filter(aFacturer); else if(S.fStatut!=="tous") list=list.filter(c=>c.statut===S.fStatut);
+  if(S.fDate) list=list.filter(c=>c.enlDate===S.fDate || (c.livDate||c.enlDate)===S.fDate);
   if(S.fPeriode==="jour") list=list.filter(c=>c.enlDate===t);
   if(S.fPeriode==="semaine"){ const a=addDays(t,-((new Date().getDay()+6)%7)), b=addDays(a,6); list=list.filter(c=>c.enlDate>=a&&c.enlDate<=b); }
   if(q) list=list.filter(c=>[c.donneur,c.ref,c.enlVille,c.livVille,c.enlNom,c.livNom,condName(c.conducteurId),camName(c.camionId),remName(c.remorqueId),c.marchandise].join(" ").toLowerCase().includes(q));
@@ -524,8 +528,11 @@ function vCourses(){
   return `<div class="bar"><h1>Courses</h1><button type="button" class="btn btn-ghost" data-act="import">Importer une confirmation PDF</button><button type="button" class="btn btn-accent" data-act="new">+ Nouvelle course</button></div>
   <div class="filters">${chips}</div>
   <div class="filters"><label style="flex:1 1 260px"><span style="position:absolute;left:-9999px">Rechercher</span><input type="search" id="fQ" placeholder="Rechercher : client, ville, référence, conducteur…" value="${esc(S.fQ)}"></label>
-   <div class="seg" role="group" aria-label="Période">${[["tout","Toutes dates"],["jour","Aujourd'hui"],["semaine","Cette semaine"]].map(([k,l])=>`<button type="button" class="${S.fPeriode===k?"on":""}" data-fper="${k}">${l}</button>`).join("")}</div></div>
-  <div class="panel tbl-wrap">${list.length?`<table><thead><tr><th>Statut</th><th>Donneur d'ordre</th><th>Enlèvement</th><th>Date d'enlèvement</th><th>Livraison</th><th>Date de livraison</th><th>Marchandises</th><th>Conducteur · véhicule</th><th class="r">Prix HT</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">Aucune course pour le moment. Créez une course ou importez une confirmation PDF.</div>`}</div>`;
+   <div class="seg" role="group" aria-label="Période">${[["tout","Toutes dates"],["jour","Aujourd'hui"],["semaine","Cette semaine"]].map(([k,l])=>`<button type="button" class="${S.fPeriode===k&&!S.fDate?"on":""}" data-fper="${k}">${l}</button>`).join("")}</div>
+   <div style="display:flex;gap:6px;align-items:center" role="group" aria-label="Choisir une date"><button type="button" class="btn btn-ghost btn-sm" data-fdj="-1" aria-label="Jour précédent">‹</button><input type="date" id="fDate" value="${esc(S.fDate)}" aria-label="Date des courses" style="width:auto"><button type="button" class="btn btn-ghost btn-sm" data-fdj="1" aria-label="Jour suivant">›</button>${S.fDate?`<button type="button" class="btn btn-ghost btn-sm" data-fdclr="1">Effacer la date</button>`:""}</div></div>
+  ${S.fDate?(()=>{ const act=list.filter(c=>c.statut!=="annulee"); const ne=act.filter(c=>c.enlDate===S.fDate).length, nl=act.filter(c=>(c.livDate||c.enlDate)===S.fDate).length, tot=act.reduce((x,c)=>x+(Number(c.prix)||0),0);
+     return `<div class="banner" role="status"><span><b>${esc(frDate(S.fDate,{weekday:"long",day:"numeric",month:"long",year:"numeric"}))}</b> : ${act.length} course${act.length>1?"s":""} (${ne} enlèvement${ne>1?"s":""}, ${nl} livraison${nl>1?"s":""}) · ${eur(tot)} HT</span></div>`; })():""}
+  <div class="panel tbl-wrap">${list.length?`<table><thead><tr><th>Statut</th><th>Donneur d'ordre</th><th>Enlèvement</th><th>Date d'enlèvement</th><th>Livraison</th><th>Date de livraison</th><th>Marchandises</th><th>Conducteur · véhicule</th><th class="r">Prix HT</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">${S.fDate?"Aucune course (enlèvement ou livraison) à cette date.":"Aucune course pour le moment. Créez une course ou importez une confirmation PDF."}</div>`}</div>`;
 }
 function statChip(c){ const st=c.statut||"a_planifier"; const et=etape(c); let x=`<span class="chip st-${esc(et)}">${esc(etapeLib(c))}</span>`; if(ETAPES[et] && c[ETAPES[et].h]) x+=`<div class="muted" style="font-size:12px;margin-top:3px">depuis ${esc(c[ETAPES[et].h])}</div>`;
   if(c.reserve) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Réserve</span></div>`;
@@ -535,7 +542,7 @@ function statChip(c){ const st=c.statut||"a_planifier"; const et=etape(c); let x
   if(incNew(c).length) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Problème signalé</span></div>`;
   if(c.modifieApresEnvoi && st==="envoyee") x+=`<div class="muted" style="font-size:11px;margin-top:3px">Modifiée après envoi</div>`;
   return x; }
-after.courses = ()=>{ const q=$("#fQ"); if(q){ q.addEventListener("input",()=>{ S.fQ=q.value; const pos=q.selectionStart; render(); const n=$("#fQ"); n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} }); }
+after.courses = ()=>{ const fd=$("#fDate"); if(fd) fd.addEventListener("change",()=>{ S.fDate=/^\d{4}-\d{2}-\d{2}$/.test(fd.value)?fd.value:""; if(S.fDate) S.fPeriode="tout"; render(); }); const q=$("#fQ"); if(q){ q.addEventListener("input",()=>{ S.fQ=q.value; const pos=q.selectionStart; render(); const n=$("#fQ"); n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} }); }
   document.querySelectorAll("tr[data-open]").forEach(tr=>tr.addEventListener("keydown",e=>{ if(e.key==="Enter") openCourse(tr.dataset.open); })); };
 
 /* ---------- FORMULAIRE COURSE ---------- */
@@ -1133,7 +1140,7 @@ document.addEventListener("click",async e=>{
   else if(d.mode){ S.mode=d.mode; render(); }
   else if(d.repos){ const k=condById(d.repos); if(!k) return; const r=new Set(k.repos||[]); r.has(S.date)?r.delete(S.date):r.add(S.date); await tableWrite("conducteurs","update",k.id,{repos:[...r].filter(x=>x>=addDays(todayIso(),-60))}); }
   else if(d.fst){ S.fStatut=d.fst; if(S.view!=="courses") location.hash="courses"; else render(); }
-  else if(d.fper){ S.fPeriode=d.fper; render(); }
+  else if(d.fper){ S.fPeriode=d.fper; S.fDate=""; render(); }
   else if(d.drv){ drvAction(d.drv,d.id,el); }
   else if(d.dday){ S.drvDay=d.dday; if($("#modal").innerHTML) closeModal(); render(); window.scrollTo(0,0); }
   else if(d.inctype){ S.incType=d.inctype; document.querySelectorAll("[data-inctype]").forEach(b=>{ const on=b.dataset.inctype===S.incType; b.setAttribute("aria-checked",on?"true":"false"); b.classList.toggle("btn-navy",on); b.classList.toggle("btn-ghost",!on); }); }
