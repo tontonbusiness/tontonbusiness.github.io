@@ -541,7 +541,6 @@ function vCourses(){
      <label style="display:flex;gap:6px;align-items:center">Du<input type="date" id="fDate" value="${esc(S.fDate)}" style="width:auto"></label>
      ${S.fDate&&!S.fDate2?`<button type="button" class="btn btn-ghost btn-sm" data-fdj="1" aria-label="Jour suivant">›</button>`:""}
      <label style="display:flex;gap:6px;align-items:center">au<input type="date" id="fDate2" value="${esc(S.fDate2)}" style="width:auto"></label>
-     <button type="button" class="btn btn-ghost btn-sm" data-fdr="mois">Ce mois-ci</button><button type="button" class="btn btn-ghost btn-sm" data-fdr="mois1">Mois dernier</button><button type="button" class="btn btn-ghost btn-sm" data-fdr="7j">7 derniers jours</button>
      ${S.fDate?`<button type="button" class="btn btn-ghost btn-sm" data-fdclr="1">Effacer les dates</button>`:""}</div></div>
   ${S.fDate?(()=>{ const a=S.fDate, b=(S.fDate2&&S.fDate2>=S.fDate)?S.fDate2:S.fDate; const act=list.filter(c=>c.statut!=="annulee");
      const ne=act.filter(c=>c.enlDate>=a&&c.enlDate<=b).length, nl=act.filter(c=>{ const l=c.livDate||c.enlDate||""; return l>=a&&l<=b; }).length, tot=act.reduce((x,c)=>x+(Number(c.prix)||0),0);
@@ -1110,11 +1109,22 @@ async function showAcces(condId, regen){
 }
 
 /* ---------- clics globaux ---------- */
+/* une fenêtre où l'on a saisi quelque chose ne se ferme jamais par un simple clic à côté */
+let downSurFond=false;
+document.addEventListener("mousedown",e=>{ downSurFond = !!(e.target && e.target.id==="mbg"); },true);
+document.addEventListener("touchstart",e=>{ downSurFond = !!(e.target && e.target.id==="mbg"); },{capture:true,passive:true});
+function modalModifie(){
+  try{ return [...document.querySelectorAll("#modal input,#modal textarea,#modal select")].some(i=>{
+    if(i.type==="hidden"||i.type==="button"||i.type==="submit"||i.type==="file") return false;
+    if(i.tagName==="SELECT"){ const d=[...i.options].findIndex(o=>o.defaultSelected); return i.selectedIndex!==(d<0?0:d); }
+    if(i.type==="checkbox"||i.type==="radio") return i.checked!==i.defaultChecked;
+    return i.value!==i.defaultValue; }); }catch(e){ return false; } }
+let echapArme=0;
 function allerAccueil(){ closeModal(); S.date=todayIso(); const h=(location.hash||"").replace("#",""); if(h!=="indicateurs"){ location.hash="indicateurs"; } else { S.view="indicateurs"; render(); window.scrollTo(0,0); } }
 document.addEventListener("keydown",e=>{ if((e.key==="Enter"||e.key===" ") && e.target.matches && e.target.matches("[data-home]")){ e.preventDefault(); allerAccueil(); } });
 document.addEventListener("click",async e=>{
   if(e.target.closest && e.target.closest("[data-home]")){ allerAccueil(); return; }
-  if(e.target.id==="mbg"){ if(!$("#modal [data-lock='keep']")) closeModal(); return; }
+  if(e.target.id==="mbg"){ if(downSurFond && !$("#modal [data-lock='keep']") && !modalModifie()) closeModal(); return; }
   const el=e.target.closest("[data-act],[data-open],[data-day],[data-mode],[data-repos],[data-fst],[data-fper],[data-drv],[data-dday],[data-impedit],[data-impdel],[data-savecond],[data-delcond],[data-savecam],[data-delcam],[data-saverem],[data-delrem],[data-auth],[data-acces],[data-regen],[data-unlink],[data-copy],[data-doc],[data-inctype]");
   if(!el) return;
   const d=el.dataset;
@@ -1174,7 +1184,9 @@ document.addEventListener("change",e=>{
   if(e.target.dataset && e.target.dataset.bl){ const f=e.target.files&&e.target.files[0]; if(f) uploadBL(e.target.dataset.bl,f); }
 });
 document.addEventListener("input",e=>{ if(e.target.id==="resTxt") S.resTxt=e.target.value; });
-document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("#modal").innerHTML) closeModal(); });
+document.addEventListener("keydown",e=>{ if(e.key!=="Escape" || !$("#modal").innerHTML) return;
+  if(modalModifie() && Date.now()-echapArme>3000){ echapArme=Date.now(); toast("Saisie non enregistrée : appuyez encore sur Échap pour abandonner."); return; }
+  closeModal(); });
 
 /* ---------- démarrage ---------- */
 async function boot(){
