@@ -84,7 +84,8 @@ async function faireDup(){
   if(!dates.length){ toast("Cochez au moins un jour."); return; }
   const dec = c.enlDate&&c.livDate ? Math.max(0,Math.round((new Date(c.livDate+"T12:00:00")-new Date(c.enlDate+"T12:00:00"))/86400000)) : 0;
   const rows=dates.map(d=>{ const row={ entreprise_id:EID(), statut:"a_planifier", source:"duplication", enl_date:d, liv_date:addDays(d,dec) };
-    CHAMPS.forEach(k=>{ if(k==="ref") return; const v=c[k]; row[snake(k)] = (v===""||v===undefined)?null:v; }); return row; });
+    CHAMPS.forEach(k=>{ if(k==="ref") return; const v=c[k]; row[snake(k)] = (v===""||v===undefined)?null:v; });
+    if(Array.isArray(c.commandes) && c.commandes.length) row.commandes=c.commandes; return row; });
   const r=await sb.from("courses").insert(rows);
   if(r.error){ toast(rErr(r.error)); return; }
   closeModal(); toast(rows.length>1?`${rows.length} courses créées dans « À planifier »`:"Course créée dans « À planifier »"); await T.loadData();

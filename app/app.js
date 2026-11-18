@@ -566,7 +566,7 @@ function courseForm(c,opts={}){
   <fieldset><legend>Donneur d'ordre</legend>${grp("d")}</fieldset>
   <fieldset><legend>Enlèvement</legend>${grp("e")}</fieldset>
   <fieldset><legend>Livraison</legend>${grp("l")}</fieldset>
-  <fieldset><legend>Marchandises</legend>${grp("m")}</fieldset>
+  <fieldset><legend>Marchandises</legend>${grp("m")}${cmdBlock(c)}</fieldset>
   ${opts.draft?"":`<fieldset><legend>Affectation</legend>
     <label class="fld">Conducteur<select id="f_conducteurId">${condOpts}</select></label>
     <label class="fld">Camion / tracteur<select id="f_camionId">${camOpts}</select></label>
@@ -588,11 +588,41 @@ function courseForm(c,opts={}){
     ${!opts.draft && (!c.statut||c.statut==="a_planifier"||c.statut==="planifiee") ? `<button type="submit" class="btn btn-ghost" data-send="0">Enregistrer sans envoyer</button><button type="submit" class="btn btn-accent" data-send="1">Enregistrer et envoyer</button>` : `<button type="submit" class="btn btn-accent">${opts.draft?"Valider ces informations":"Enregistrer"}</button>`}</div>
   </form>`;
 }
+/* ---------- commandes multiples sur une course ---------- */
+const cmdOk = () => !S.courses.length || ("commandes" in S.courses[0]);
+const cmdRow = (l={}) => `<div class="cmdrow" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+  <label class="fld" style="flex:2;min-width:140px">Commande / référence<input class="cmdin" data-k="ref" type="text" value="${esc(l.ref||"")}" placeholder="Ex. : commande 1"></label>
+  <label class="fld" style="flex:1;min-width:80px">Colis<input class="cmdin" data-k="colis" type="number" step="any" inputmode="decimal" value="${esc(l.colis??"")}"></label>
+  <label class="fld" style="flex:1;min-width:80px">Palettes<input class="cmdin" data-k="palettes" type="number" step="any" inputmode="decimal" value="${esc(l.palettes??"")}"></label>
+  <label class="fld" style="flex:1;min-width:80px">Poids (kg)<input class="cmdin" data-k="poids" type="number" step="any" inputmode="decimal" value="${esc(l.poids??"")}"></label>
+  <button type="button" class="btn btn-ghost btn-sm" data-cmd="del" aria-label="Retirer cette commande">✕</button></div>`;
+function cmdBlock(c){
+  if(!cmdOk()) return "";
+  const L=Array.isArray(c.commandes)?c.commandes:[];
+  return `<div class="wide" id="cmdBox" style="grid-column:1/-1;display:flex;flex-direction:column;gap:8px;margin-top:6px">
+    <b>Plusieurs commandes sur cette course ?</b><span class="muted" style="font-size:13px">Ajoutez une ligne par commande : les totaux (colis, palettes, poids) se calculent tout seuls.</span>
+    <div id="cmdRows" style="display:flex;flex-direction:column;gap:10px">${L.map(cmdRow).join("")}</div>
+    <button type="button" class="btn btn-ghost btn-sm" data-cmd="add" style="align-self:flex-start">+ Ajouter une commande</button></div>`; }
+function cmdLire(){
+  return [...document.querySelectorAll("#cmdRows .cmdrow")].map(r=>{ const o={};
+    r.querySelectorAll(".cmdin").forEach(i=>{ let v=i.value.trim(); if(i.dataset.k!=="ref") v = v===""?null:Number(v.replace(",",".")); o[i.dataset.k]= (v===""||(typeof v==="number"&&!isFinite(v)))?null:v; }); return o; })
+    .filter(o=>o.ref||o.colis!=null||o.palettes!=null||o.poids!=null); }
+function cmdSomme(){
+  const L=cmdLire(); if(!L.length) return;
+  [["colis","f_colis"],["palettes","f_palettes"],["poids","f_poids"]].forEach(([k,id])=>{ const el=$("#"+id); if(!el) return;
+    const vals=L.map(o=>o[k]).filter(v=>v!=null); if(vals.length) el.value=String(Math.round(vals.reduce((a,b)=>a+b,0)*100)/100); }); }
+document.addEventListener("click",e=>{ const b=e.target.closest("[data-cmd]"); if(!b) return;
+  if(b.dataset.cmd==="add"){ $("#cmdRows").insertAdjacentHTML("beforeend",cmdRow({})); const i=$("#cmdRows .cmdrow:last-child .cmdin"); i&&i.focus(); }
+  else if(b.dataset.cmd==="del"){ b.closest(".cmdrow").remove(); cmdSomme(); } });
+document.addEventListener("input",e=>{ if(e.target.classList&&e.target.classList.contains("cmdin")) cmdSomme(); });
+/* texte du détail des commandes (écran conducteur) */
+const cmdTexte = c => (Array.isArray(c.commandes)?c.commandes:[]).map(l=>[l.ref,l.colis!=null&&l.colis+" colis",l.palettes!=null&&l.palettes+" pal.",l.poids!=null&&l.poids+" kg"].filter(Boolean).join(" · ")).filter(Boolean);
 function readForm(base){
   const o={};
   F.forEach(([k,,t])=>{ const el=$("#f_"+k); if(!el) return; let v=el.value.trim(); if(t==="number") v = v===""?null:Number(v.replace(",",".")); o[k]=v===""?null:v; });
   ["conducteurId","camionId","remorqueId","statut","arriveeEnl","chargeEnl","arriveeLiv","livre","reserve"].forEach(k=>{ const el=$("#f_"+k); if(el) o[k]=el.value.trim()||null; });
   const fc=$("#f_facturee"); if(fc) o.facturee=fc.checked;
+  if($("#cmdRows")){ const cl=cmdLire(); if(cl.length || (Array.isArray(base.commandes)&&base.commandes.length)) o.commandes=cl; }
   if(o.camionId && !isTracteur(o.camionId)) o.remorqueId=null;
   if(!o.statut) o.statut=base.statut||"a_planifier";
   if(o.statut==="a_planifier" && o.conducteurId) o.statut="planifiee";
@@ -858,6 +888,7 @@ function jobHtml(c,n,cur){
     ${step(!!c.livre,livCur,"liv","Livraison"+jour(c.livDate),c.livHeure,`<div>${esc(c.livNom||"")}</div><div>${esc(c.livAdresse||"")} ${esc(c.livCp||"")} ${esc(c.livVille||"")}</div><a href="${maps(c.livAdresse,c.livCp,c.livVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,sub("Arrivé",c.arriveeLiv)+sub("Livré",c.livre)+(c.signataire?`<span class="sub ok">✓ Signé par ${esc(c.signataire)}</span>`:""),livBtn)}
     ${vehLabel(c)?`<div style="font-size:13px"><b>Véhicule :</b> ${esc(vehLabel(c))}</div>`:""}
     ${m||c.ref?`<div class="muted" style="font-size:13px">${esc(m)}${c.ref?" · Réf. "+esc(c.ref):""}</div>`:""}
+    ${cmdTexte(c).length>1?`<div style="font-size:13px"><b>Commandes :</b><ul style="margin:4px 0 0;padding-left:18px">${cmdTexte(c).map(t=>`<li>${esc(t)}</li>`).join("")}</ul></div>`:""}
     ${c.instructions?`<div style="background:var(--accent-soft);border-radius:8px;padding:8px 10px;font-size:13px"><b>Consignes :</b> ${esc(c.instructions)}</div>`:""}
     ${c.contact?`<div style="font-size:13px">Contact : <span style="user-select:all">${esc(c.contact)}</span></div>`:""}
     ${c.reserve?`<div class="alert"><b>Réserve :</b> ${esc(c.reserve)}</div>`:""}
