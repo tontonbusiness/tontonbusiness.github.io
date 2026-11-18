@@ -8,6 +8,8 @@ const R = T.R = { ready:false, list:[], busy:false, edit:null };
 const JOURS = [[1,"Lun"],[2,"Mar"],[3,"Mer"],[4,"Jeu"],[5,"Ven"],[6,"Sam"],[7,"Dim"]];
 /* champs copiés d'une course vers un modèle (camelCase côté course, snake_case côté base) */
 const CHAMPS = ["donneur","ref","prix","contact","enlNom","enlAdresse","enlCp","enlVille","enlHeure","enlHeureFin","livNom","livAdresse","livCp","livVille","livHeure","livHeureFin","palettes","colis","poids","metres","marchandise","instructions"];
+/* un modèle ne copie pas les quantités : elles changent chaque jour et se saisissent sur la course */
+const MCH = CHAMPS.filter(k=>!["palettes","colis","poids","metres"].includes(k));
 const snake = k => k.replace(/[A-Z]/g, m=>"_"+m.toLowerCase());
 const camel = k => k.replace(/_([a-z])/g, (_,m)=>m.toUpperCase());
 const hm = v => v ? String(v).slice(0,5) : "";
@@ -39,7 +41,7 @@ async function generer(){
     for(let d=debut; d<=hor; d=addDays(d,1)){
       if(!(m.jours||[]).includes(dow(d))) continue;
       const row={ entreprise_id:EID(), statut:"a_planifier", source:"recurrente", modele_id:m.id, modele_date:d, enl_date:d, liv_date:addDays(d,m.liv_decalage||0) };
-      CHAMPS.forEach(k=>{ const v=m[snake(k)]; row[snake(k)] = v===""?null:v; });
+      MCH.forEach(k=>{ const v=m[snake(k)]; row[snake(k)] = v===""?null:v; });
       rows.push(row);
     }
     if(!m.genere_jusqu_au || m.genere_jusqu_au<hor) maj.push(m.id);
@@ -93,7 +95,7 @@ function ouvrirRec(id){
   const c=S.courses.find(x=>x.id===id); if(!c) return;
   R.edit={type:"rec",id};
   openModal(`<h2>Rendre cette course récurrente</h2>
-    <p class="muted">Mobilog créera automatiquement cette course chaque jour choisi, avec les mêmes adresses, heures et prix. <b>Le chauffeur n'est pas copié</b> : la course arrive dans « À planifier » et vous l'affectez comme d'habitude.</p>
+    <p class="muted">Mobilog créera automatiquement cette course chaque jour choisi, avec les mêmes adresses, heures et prix. <b>Le chauffeur et les quantités (palettes, colis, poids) ne sont pas copiés</b> : la course arrive dans « À planifier » et vous l'affectez comme d'habitude.</p>
     <label class="fld">Nom du modèle<input id="rcNom" value="${esc((c.donneur||"Course")+" — "+(c.enlVille||"?")+" → "+(c.livVille||"?"))}"></label>
     <div><b>Jours de la semaine</b><div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px">${JOURS.map(([n,l])=>`<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="rcJ" value="${n}" ${n<=5?"checked":""} style="width:20px;height:20px">${l}</label>`).join("")}</div></div>
     <div class="row-btns"><button type="button" class="btn btn-ghost" data-act="close">Annuler</button><button type="button" class="btn btn-accent" data-r="recgo">Créer le modèle</button></div>`);
@@ -104,7 +106,7 @@ async function faireRec(){
   if(!nom){ toast("Donnez un nom au modèle."); return; } if(!jours.length){ toast("Choisissez au moins un jour."); return; }
   const dec = c.enlDate&&c.livDate ? Math.max(0,Math.min(7,Math.round((new Date(c.livDate+"T12:00:00")-new Date(c.enlDate+"T12:00:00"))/86400000))) : 0;
   const row={ entreprise_id:EID(), nom, jours, actif:true, liv_decalage:dec, genere_jusqu_au: (c.enlDate && c.enlDate>todayIso()) ? c.enlDate : todayIso() };
-  CHAMPS.forEach(k=>{ const v=c[k]; row[snake(k)] = (v===""||v===undefined)?null:v; });
+  MCH.forEach(k=>{ const v=c[k]; row[snake(k)] = (v===""||v===undefined)?null:v; });
   const r=await sb.from("courses_modeles").insert(row);
   if(r.error){ toast(rErr(r.error)); return; }
   closeModal(); toast("Modèle créé : les prochaines courses se créeront toute seules"); await T.loadData();
