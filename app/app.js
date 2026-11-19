@@ -651,7 +651,8 @@ function readForm(base){
   if(stEl){ const nv=stEl.value||null, av=base.sousTraitantId||null; o.sousTraitantId=nv;
     if(nv && nv!==av){ o.conducteurId=null; o.camionId=null; o.remorqueId=null; o.ordreEnvoyeLe=null; o.vuLe=null; if(o.statut==='envoyee'||o.statut==='a_planifier') o.statut='planifiee'; }
     else if(nv && o.conducteurId){ o.sousTraitantId=null; o.ordreEnvoyeLe=null; }
-    else if(!nv && av){ o.ordreEnvoyeLe=null; } }
+    else if(!nv && av){ o.ordreEnvoyeLe=null; }
+    if(av && (o.sousTraitantId||null)!==av && Array.isArray(base.couts)) o.couts=base.couts.filter(l=>l.st!==av); }
   if(o.camionId && !isTracteur(o.camionId)) o.remorqueId=null;
   if(!o.statut) o.statut=base.statut||"a_planifier";
   if(o.statut==="a_planifier" && o.conducteurId) o.statut="planifiee";
