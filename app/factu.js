@@ -461,8 +461,9 @@ function paper(p){
   const t = totals(p.lignes); if(fin){ t.ht=Number(p.total_ht); t.tva=Number(p.total_tva); t.ttc=Number(p.total_ttc); }
   const orig = p.origine_id ? F.pieces.find(x=>x.id===p.origine_id) : null;
   const li = (a,b) => b ? `<div>${a?`<small>${a} : </small>`:""}${esc(b)}</div>` : "";
+  const logo = em.logo || F.param.societe.logo || "";
   return `<div class="paper">${fin?"":`<div class="wm">BROUILLON</div>`}
-    <div class="two-col"><div><b style="font-size:17px">${esc(em.nom||"Votre société")}</b>${li("",[em.forme,em.capital?"au capital de "+em.capital:""].filter(Boolean).join(" "))}${li("",em.adresse)}${li("",[em.cp,em.ville].filter(Boolean).join(" "))}${li("SIRET",em.siret)}${li("RCS",em.rcs)}${li("TVA",em.tva_intra)}${li("Tél.",em.tel)}${li("",em.email)}</div>
+    <div class="two-col"><div>${logo?`<img src="${esc(logo)}" alt="Logo" style="display:block;max-width:220px;max-height:90px;object-fit:contain;margin-bottom:8px">`:""}<b style="font-size:17px">${esc(em.nom||"Votre société")}</b>${li("",[em.forme,em.capital?"au capital de "+em.capital:""].filter(Boolean).join(" "))}${li("",em.adresse)}${li("",[em.cp,em.ville].filter(Boolean).join(" "))}${li("SIRET",em.siret)}${li("RCS",em.rcs)}${li("TVA",em.tva_intra)}${li("Tél.",em.tel)}${li("",em.email)}</div>
       <div style="text-align:right"><h3>${LAB[p.type].titre}</h3><div><b>N° ${esc(p.numero||"— (brouillon)")}</b></div><div><small>Date : </small>${d2(p.date_emission||todayIso())}</div>${p.type==="facture"&&p.date_echeance?`<div><small>Échéance : </small><b>${d2(p.date_echeance)}</b></div>`:""}${p.type==="devis"&&p.date_echeance?`<div><small>Valable jusqu'au : </small>${d2(p.date_echeance)}</div>`:""}${orig?`<div><small>Avoir sur la facture </small>${esc(orig.numero||"")}</div>`:""}</div></div>
     <div class="two-col"><div></div><div class="box"><small>${p.type==="devis"?"Destinataire":"Facturé à"}</small><div><b>${esc(cl.nom||"Client à choisir")}</b></div>${li("",cl.adresse)}${li("",[cl.cp,cl.ville].filter(Boolean).join(" "))}${li("SIREN",cl.siren)}${li("TVA",cl.tva_intra)}</div></div>
     <table><thead><tr><th>Désignation</th><th class="r">Qté</th><th class="r">Prix unitaire HT</th><th class="r">TVA</th><th class="r">Total HT</th></tr></thead><tbody>
@@ -565,6 +566,9 @@ T.views.reglages = () => {
   const inp=(pre,k,l,v,type)=>`<label class="fld">${l}<input class="fin" type="${type||"text"}" id="${pre}_${k}" value="${esc(v??"")}"></label>`;
   return `<div class="bar"><h1>Paramètres</h1></div>
   <div class="pan"><h2>Société</h2><span class="muted" style="font-size:13px">Ces informations sont imprimées sur vos devis, factures et avoirs. Le nom et le SIRET sont obligatoires pour finaliser une facture.</span>
+    <div class="logo-box" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 0"><div style="width:200px;height:80px;border:1px dashed var(--line,#999);border-radius:8px;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden">${so.logo?`<img src="${esc(so.logo)}" alt="Logo" style="max-width:100%;max-height:100%;object-fit:contain">`:`<span class="muted" style="font-size:12px">Aucun logo</span>`}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn btn-ghost" style="cursor:pointer">${so.logo?"Changer le logo":"Choisir un logo"}<input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" hidden></label>${so.logo?`<button type="button" class="btn btn-ghost" data-f="logodel">Retirer le logo</button>`:""}</div>
+      <span class="muted" style="font-size:12px;flex-basis:100%">Affiché en haut à gauche de vos devis, factures et avoirs. Enregistré dès que vous le choisissez.</span></div>
     <div class="fgrid">${SO.map(([k,l])=>inp("so",k,l,so[k])).join("")}</div><div class="row-btns"><button type="button" class="btn btn-accent" data-f="psave">Enregistrer la société</button></div></div>
   <div class="pan"><h2>Configuration de la facturation</h2>
     <div class="fgrid">${inp("fa","tva","Taux de TVA par défaut (%)",fa.tva??20,"number")}${inp("fa","delai_paiement","Délai de paiement par défaut (jours)",fa.delai_paiement??30,"number")}${inp("fa","prefixe_facture","Préfixe des factures",fa.prefixe_facture||"F")}${inp("fa","prefixe_avoir","Préfixe des avoirs",fa.prefixe_avoir||"A")}${inp("fa","prefixe_devis","Préfixe des devis",fa.prefixe_devis||"D")}${inp("fa","penalites","Pénalités de retard (texte)",fa.penalites||"au taux de trois fois le taux d'intérêt légal")}</div>
@@ -583,8 +587,16 @@ function prodRows(){ if(!F.prods) F.prods=JSON.parse(JSON.stringify(F.param.fact
 async function saveProds(){ const L=(F.prods||[]).map(x=>({nom:String(x.nom||"").trim(),prix:x.prix===""||x.prix==null?null:Number(x.prix),tva:x.tva===""||x.tva==null?null:Number(x.tva),code:String(x.code||"").trim()||null})).filter(x=>x.nom);
   const {error}=await sb.from("parametres").upsert({entreprise_id:EID(),societe:F.param.societe,facturation:Object.assign({},F.param.facturation,{produits:L})},{onConflict:"entreprise_id"});
   if(error){ toast(fErr(error)); return; } F.prods=null; toast("Catalogue enregistré"); reload(); }
+async function saveLogo(url){
+  const societe=Object.assign({},F.param.societe); if(url) societe.logo=url; else delete societe.logo;
+  const {error}=await sb.from("parametres").upsert({entreprise_id:EID(),societe,facturation:F.param.facturation},{onConflict:"entreprise_id"});
+  if(error){ toast(fErr(error)); return; } toast(url?"Logo enregistré":"Logo retiré"); reload(); }
+function logoReduit(file){ return new Promise((ok,ko)=>{ const r=new FileReader(); r.onerror=()=>ko(); r.onload=()=>{ const im=new Image(); im.onerror=()=>ko(); im.onload=()=>{
+  const k=Math.min(1,700/im.width), w=Math.round(im.width*k), h=Math.round(im.height*k); const c=document.createElement("canvas"); c.width=w; c.height=h; const x=c.getContext("2d");
+  const png=file.type==="image/png"||file.type==="image/webp"; if(!png){ x.fillStyle="#fff"; x.fillRect(0,0,w,h); } x.drawImage(im,0,h?0:0,w,h);
+  ok(png?c.toDataURL("image/png"):c.toDataURL("image/jpeg",.88)); }; im.src=r.result; }; r.readAsDataURL(file); }); }
 async function saveParam(){
-  const societe={}; SO.forEach(([k])=>{ const v=$("#so_"+k).value.trim(); if(v) societe[k]=v; });
+  const societe={}; SO.forEach(([k])=>{ const v=$("#so_"+k).value.trim(); if(v) societe[k]=v; }); if(F.param.societe.logo) societe.logo=F.param.societe.logo;
   const fa={}; ["tva","delai_paiement","prefixe_facture","prefixe_avoir","prefixe_devis","penalites","pied"].forEach(k=>{ const v=$("#fa_"+k).value.trim(); if(v!=="") fa[k]=v; }); fa.tva_debits=$("#fa_tva_debits").checked; fa.produits=F.param.facturation.produits||[];
   if(fa.tva!==undefined && !(Number(fa.tva)>=0 && Number(fa.tva)<=100)){ toast("Le taux de TVA doit être compris entre 0 et 100."); return; }
   if(fa.delai_paiement!==undefined && !(Number(fa.delai_paiement)>=0 && Number(fa.delai_paiement)<=90)){ toast("Le délai de paiement doit être compris entre 0 et 90 jours."); return; }
@@ -685,6 +697,7 @@ document.addEventListener("click", async e=>{
   else if(a==="cdel"){ if(!el.dataset.ok){ el.dataset.ok="1"; el.textContent="Confirmer la suppression"; return; } const {error}=await sb.from("clients").delete().eq("id",F.clientId); if(error){ toast(fErr(error)); return; } closeModal(); toast("Client supprimé"); reload(); }
   else if(a==="carch"){ const c=clientById(F.clientId); const {error}=await sb.from("clients").update({actif:c.actif===false}).eq("id",c.id); if(error){ toast(fErr(error)); return; } closeModal(); toast(c.actif===false?"Client réactivé":"Client archivé"); reload(); }
   else if(a==="psave"){ saveParam(); }
+  else if(a==="logodel"){ saveLogo(""); }
   else if(a==="pradd"){ F.prods.push({nom:"",prix:"",tva:"",code:""}); $("#prBody").innerHTML=prodRows(); const all=document.querySelectorAll('[data-pr="nom"]'); all[all.length-1]?.focus(); }
   else if(a==="prdel"){ F.prods.splice(Number(d.i),1); $("#prBody").innerHTML=prodRows(); }
   else if(a==="prsave"){ saveProds(); }
@@ -701,6 +714,8 @@ document.addEventListener("input", e=>{
 });
 document.addEventListener("change", async e=>{
   const de=e.target.dataset||{};
+  if(e.target.id==="logoFile"){ const f=e.target.files&&e.target.files[0]; if(!f) return; if(f.size>8*1024*1024){ toast("Image trop lourde (8 Mo maximum)."); return; }
+    try{ const u=await logoReduit(f); if(u.length>600000){ toast("Logo trop détaillé : utilisez une image plus simple."); return; } await saveLogo(u); }catch(_){ toast("Image illisible."); } return; }
   if(de.ct==="type" || de.ct==="st"){ const l=CT.lignes[Number(de.i)]; if(!l) return; if(de.ct==="type") l.type=e.target.value; else if(e.target.value==="__new"){ l.st=""; l.stnom=""; } else l.st=e.target.value;
     $("#ctBox").innerHTML=coutInner(); if(l.stnom!==undefined) document.querySelector(`[data-ct="stnom"][data-i="${de.i}"]`)?.focus(); return; }
   if(e.target.id==="stSel"){ B.st=e.target.value; render(); return; }
