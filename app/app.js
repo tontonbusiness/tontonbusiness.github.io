@@ -592,6 +592,7 @@ function courseForm(c,opts={}){
   <fieldset><legend>Marchandises</legend>${grp("m")}${cmdBlock(c)}</fieldset>
   ${opts.draft?"":`<fieldset><legend>Affectation</legend>
     <label class="fld">Conducteur<select id="f_conducteurId">${condOpts}</select></label>
+    ${X.stSelect?X.stSelect(c):""}
     <label class="fld">Camion / tracteur<select id="f_camionId">${camOpts}</select></label>
     <label class="fld" id="remWrap" ${isTracteur(c.camionId)?"":"hidden"}>Remorque<select id="f_remorqueId">${remOpts}</select></label>
     <label class="fld">Statut<select id="f_statut">${stOpts}</select></label>
@@ -646,6 +647,11 @@ function readForm(base){
   ["conducteurId","camionId","remorqueId","statut","arriveeEnl","chargeEnl","arriveeLiv","livre","reserve"].forEach(k=>{ const el=$("#f_"+k); if(el) o[k]=el.value.trim()||null; });
   const fc=$("#f_facturee"); if(fc) o.facturee=fc.checked;
   if($("#cmdRows")){ const cl=cmdLire(); if(cl.length || (Array.isArray(base.commandes)&&base.commandes.length)) o.commandes=cl; }
+  const stEl=$("#f_sousTraitantId");
+  if(stEl){ const nv=stEl.value||null, av=base.sousTraitantId||null; o.sousTraitantId=nv;
+    if(nv && nv!==av){ o.conducteurId=null; o.camionId=null; o.remorqueId=null; o.ordreEnvoyeLe=null; o.vuLe=null; if(o.statut==='envoyee'||o.statut==='a_planifier') o.statut='planifiee'; }
+    else if(nv && o.conducteurId){ o.sousTraitantId=null; o.ordreEnvoyeLe=null; }
+    else if(!nv && av){ o.ordreEnvoyeLe=null; } }
   if(o.camionId && !isTracteur(o.camionId)) o.remorqueId=null;
   if(!o.statut) o.statut=base.statut||"a_planifier";
   if(o.statut==="a_planifier" && o.conducteurId) o.statut="planifiee";
@@ -1176,7 +1182,8 @@ document.addEventListener("click",async e=>{
   else if(d.impdel!==undefined){ S.importList.splice(Number(d.impdel),1); showImport(); }
 });
 document.addEventListener("change",e=>{
-  if(e.target.id==="f_camionId"){ const w=$("#remWrap"); if(w){ w.hidden=!isTracteur(e.target.value); const cam=camById(e.target.value); const rs=$("#f_remorqueId"); if(rs && !rs.value && cam?.remorqueId) rs.value=cam.remorqueId; } }
+  if(e.target.id==="f_sousTraitantId"){ const on=!!e.target.value; ["f_conducteurId","f_camionId","f_remorqueId"].forEach(i=>{ const el=$("#"+i); if(el){ if(on) el.value=""; el.disabled=on; } }); if(on){ const w=$("#remWrap"); if(w) w.hidden=true; const stt=$("#f_statut"); if(stt && stt.value==="a_planifier") stt.value="planifiee"; } }
+    if(e.target.id==="f_camionId"){ const w=$("#remWrap"); if(w){ w.hidden=!isTracteur(e.target.value); const cam=camById(e.target.value); const rs=$("#f_remorqueId"); if(rs && !rs.value && cam?.remorqueId) rs.value=cam.remorqueId; } }
   if(e.target.id==="meSel"){ S.me=e.target.value; store.set("tp_me",S.me); render(); }
   if(e.target.id==="resPhoto"){ const f=e.target.files&&e.target.files[0]; e.target.value="";
     if(f){ if(!/^image\//.test(f.type)){ toast("Choisis une photo."); } else if(f.size>25*1024*1024){ toast("Photo trop lourde."); } else if((S.resPh||[]).length<RES_MAX){ (S.resPh=S.resPh||[]).push({file:f,url:URL.createObjectURL(f)}); const b=$("#resPhBox"); if(b) b.innerHTML=resPhHtml(); } } }

@@ -123,6 +123,9 @@ async function confier(c, stId){
   if(error){ toast(fErr(error)); return false; } await T.loadData(); return true; }
 T.assignSt = async (c, stId) => { if(await confier(c,stId)) openOrdre(c.id); };
 const prixSt = c => { const l=coutsDe(c).find(x=>x.st===c.sousTraitantId && x.libelle===CT_TYPES[0]); return l?l.montant:""; };
+T.stSelect = c => { if(!F.ready || !stActif()) return ""; const subs=sousTraitants().sort((a,b)=>a.nom.localeCompare(b.nom));
+  if(!subs.length) return `<div class="fld">Sous-traitant<span class="muted" style="font-size:13px">Aucun sous-traitant enregistré. <button type="button" class="linkbtn" data-f="cnew" data-st="1">Nouveau sous-traitant</button></span></div>`;
+  return `<label class="fld">Sous-traitant<select id="f_sousTraitantId"><option value="">— Aucun —</option>${subs.map(x=>`<option value="${esc(x.id)}" ${c.sousTraitantId===x.id?"selected":""}>${esc(x.nom)}</option>`).join("")}</select></label>`; };
 const stBloc = c => { if(!F.ready || !stActif() || c.statut==="annulee") return "";
   const st=clientById(c.sousTraitantId);
   if(st) return `<div class="banner"><span><b>Sous-traitance :</b> confié à <b>${esc(st.nom)}</b>${prixSt(c)!==""?" · "+money(prixSt(c))+" HT":""} · ${c.ordreEnvoyeLe?"ordre de transport envoyé le "+dh(c.ordreEnvoyeLe):`<b style="color:var(--accent-ink)">ordre de transport pas encore envoyé</b>`}</span><span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-accent btn-sm" data-f="ordre" data-id="${esc(c.id)}">Ordre de transport</button><button type="button" class="btn btn-ghost btn-sm" data-f="streprendre" data-id="${esc(c.id)}">Reprendre la course</button></span></div>`;
