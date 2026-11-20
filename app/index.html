@@ -158,10 +158,10 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .frise b{display:block;font-weight:600;font-size:12px}
 .frise .h{display:block;font-variant-numeric:tabular-nums}
 .frise .fs.go::before{background:linear-gradient(90deg,var(--p1),var(--p2),var(--p1));background-size:200% 100%;animation:frFlow 1.8s linear infinite}
-.bar{display:inline-block;width:34px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--p1),var(--p2),var(--p1));background-size:200% 100%;animation:frFlow 1.8s linear infinite}
+.fbar{display:inline-block;width:34px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--p1),var(--p2),var(--p1));background-size:200% 100%;animation:frFlow 1.8s linear infinite}
 .fnow{display:flex;align-items:center;justify-content:center;gap:8px;margin:6px 0 2px;font-size:13px;font-weight:600;color:var(--fg)}
 @keyframes frFlow{to{background-position:-200% 0}}
-@media (prefers-reduced-motion:reduce){.bar,.frise .fs.go::before{animation:none}}
+@media (prefers-reduced-motion:reduce){.fbar,.frise .fs.go::before{animation:none}}
 .st-annulee{background:var(--off-bg);border-color:var(--off-bd);opacity:.7}
 .chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;border:1px solid;white-space:nowrap}
 .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted)}
@@ -332,7 +332,7 @@ button,a,label,[role=button],.btn,.card,.blk,tr.click{touch-action:manipulation}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 <script src="factu.js?v=28"></script>
 <script src="litiges.js?v=1"></script>
 <script src="stockage.js?v=1"></script>

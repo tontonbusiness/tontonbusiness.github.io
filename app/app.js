@@ -68,7 +68,7 @@ function friseHtml(c){ if(!DRV_ST.includes(c.statut)) return "";
   const ph = cur>=0 && cur<3 ? PH[cur] : null;
   const fr=`<div class="frise" role="list" aria-label="Avancement de la course">${FRISE.map(([k,l,e],i)=>{ const cl=i<=cur?"ok":"";
     const col=e==="terminee"?"done":e==="route"?"run":e; const go=ph && i===cur+1; return `<div class="fs ${cl}${go?" go":""}" role="listitem" style="--c:var(--${col}-bd);--cs:var(--${col}-bg)${go?`;--p1:var(--${ph[1]}-bd);--p2:var(--${ph[2]}-bd)`:""}"><span class="pt">${cl==="ok"?"✓":i+1}</span><b>${l}</b><span class="h">${esc(c[k]||"—")}</span></div>`; }).join("")}</div>`;
-  return fr + (ph?`<div class="fnow" style="--p1:var(--${ph[1]}-bd);--p2:var(--${ph[2]}-bd)" role="status"><i class="bar" aria-hidden="true"></i>${ph[0]}</div>`:""); }
+  return fr + (ph?`<div class="fnow" style="--p1:var(--${ph[1]}-bd);--p2:var(--${ph[2]}-bd)" role="status"><i class="fbar" aria-hidden="true"></i>${ph[0]}</div>`:""); }
 // courses d'un conducteur pour un jour : celles qui s'enlèvent ou se livrent ce jour-là, plus (aujourd'hui) celles des 7 derniers jours pas encore terminées
 function inDay(c,d){ const a=c.enlDate, b=(c.livDate&&c.livDate>=c.enlDate)?c.livDate:c.enlDate; if(!a) return false;
   if(a<=d && d<=b) return true;
