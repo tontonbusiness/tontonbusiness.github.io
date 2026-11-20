@@ -158,14 +158,10 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .frise b{display:block;font-weight:600;font-size:12px}
 .frise .h{display:block;font-variant-numeric:tabular-nums}
 .frise .fs.go::before{background:linear-gradient(90deg,var(--p1),var(--p2),var(--p1));background-size:200% 100%;animation:frFlow 1.8s linear infinite}
-.frise .fs .sp{position:absolute;top:4px;left:0;width:16px;height:16px;margin-left:-8px;z-index:1;background:var(--surface,#fff);border-radius:50%}
-.sp{display:inline-block;width:14px;height:14px;border-radius:50%;box-sizing:border-box;border:3px solid transparent;border-top-color:var(--p1);border-right-color:var(--p1);animation:frSpin .9s linear infinite,frCol 2.4s ease-in-out infinite}
-.frise .fs .sp{border-width:3px}
+.bar{display:inline-block;width:34px;height:4px;border-radius:2px;background:linear-gradient(90deg,var(--p1),var(--p2),var(--p1));background-size:200% 100%;animation:frFlow 1.8s linear infinite}
 .fnow{display:flex;align-items:center;justify-content:center;gap:8px;margin:6px 0 2px;font-size:13px;font-weight:600;color:var(--fg)}
-@keyframes frSpin{to{transform:rotate(360deg)}}
 @keyframes frFlow{to{background-position:-200% 0}}
-@keyframes frCol{0%,100%{border-top-color:var(--p1);border-right-color:var(--p1)}50%{border-top-color:var(--p2);border-right-color:var(--p2)}}
-@media (prefers-reduced-motion:reduce){.sp,.frise .fs.go::before{animation:none}}
+@media (prefers-reduced-motion:reduce){.bar,.frise .fs.go::before{animation:none}}
 .st-annulee{background:var(--off-bg);border-color:var(--off-bd);opacity:.7}
 .chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;border:1px solid;white-space:nowrap}
 .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted)}
@@ -336,7 +332,7 @@ button,a,label,[role=button],.btn,.card,.blk,tr.click{touch-action:manipulation}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=30"></script>
+<script src="app.js?v=31"></script>
 <script src="factu.js?v=28"></script>
 <script src="litiges.js?v=1"></script>
 <script src="stockage.js?v=1"></script>
