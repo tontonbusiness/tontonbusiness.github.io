@@ -36,9 +36,9 @@ p{margin:0}
 header{background:var(--white);border-bottom:1px solid var(--line)}
 .top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;padding-top:16px;padding-bottom:16px}
 .logo{display:flex;align-items:center;gap:12px;font-family:Archivo,Arial,sans-serif;font-weight:800;font-size:21px;letter-spacing:.06em;color:var(--navy);text-decoration:none}
-.logo img{height:64px;width:auto;display:block}
+.logo img{height:80px;width:auto;display:block}
 .foot-brand{display:flex;align-items:center;gap:14px}
-.foot-brand img{height:72px;width:auto;display:block}
+.foot-brand img{height:72px;width:auto;display:block;background:#fff;border-radius:10px;padding:8px 12px}
 nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px 22px;font-size:15px;font-weight:500}
 nav a{text-decoration:none}
 nav .btn{padding:10px 18px;font-weight:600}
@@ -112,6 +112,15 @@ footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 
 footer a{color:#C9D4E2}footer a:hover{color:var(--white)}
 footer .links{display:flex;flex-wrap:wrap;gap:8px 20px}
 
+/* mobilog */
+.mobi-card{display:flex;flex-wrap:wrap;align-items:center;gap:24px 40px;background:var(--white);border:1px solid var(--line);border-left:5px solid var(--orange);border-radius:14px;padding:32px}
+.mobi-card img{height:84px;width:auto;max-width:100%;display:block;flex:none}
+.mobi-text{flex:1 1 380px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.mobi-text h2{font-size:clamp(24px,3.6vw,30px);margin:0}
+.mobi-text p{font-size:17px;color:var(--muted)}
+.btn.navy{background:var(--navy);color:var(--white)}
+.btn.navy:hover{background:var(--navy-dark);color:var(--white)}
+
 @media (max-width:520px){
   .wrap{padding:0 16px}
   .hero .wrap{padding-top:44px;padding-bottom:52px;gap:32px}
@@ -125,11 +134,12 @@ footer .links{display:flex;flex-wrap:wrap;gap:8px 20px}
 
 <header>
   <div class="wrap top">
-    <a class="logo" href="#"><img src="logo-noir.png" alt="" width="62" height="64">TONTON BUSINESS</a>
+    <a class="logo" href="#" aria-label="Tonton Business"><img src="logo-tb.png" alt="Tonton Business" width="123" height="80"></a>
     <nav aria-label="Menu principal">
       <a href="#contenu">Le kit</a>
       <a href="#fonctionnement">Comment ça marche</a>
       <a href="#faq">Questions</a>
+      <a href="mobilog/">Mobilog, le logiciel</a>
       <a class="btn" href="#lancement">Être prévenu</a>
     </nav>
   </div>
@@ -224,6 +234,19 @@ footer .links{display:flex;flex-wrap:wrap;gap:8px 20px}
   </div>
 </section>
 
+<section class="block" id="mobilog" style="padding-top:8px">
+  <div class="wrap">
+    <div class="mobi-card">
+      <img src="mobilog/logo-mobilog.png" alt="Mobilog par Tonton Business" width="280" height="84">
+      <div class="mobi-text">
+        <h2>Pour aller plus loin : Mobilog</h2>
+        <p>Le kit mesure votre rentabilité dans un tableau. Mobilog, notre logiciel d'exploitation, planifie vos courses, suit vos chauffeurs et prépare vos factures au même endroit.</p>
+        <div><a class="btn navy" href="mobilog/">Découvrir Mobilog</a></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="final" id="lancement">
   <div class="wrap">
     <h2>Soyez prévenu dès le lancement</h2>
@@ -236,7 +259,7 @@ footer .links{display:flex;flex-wrap:wrap;gap:8px 20px}
 
 <footer>
   <div class="wrap">
-    <span class="foot-brand"><img src="logo-blanc.png" alt="Tonton Business" width="70" height="72">© 2026 Tonton Business</span>
+    <span class="foot-brand"><img src="logo-tb.png" alt="Tonton Business" width="108" height="72">© 2026 Tonton Business</span>
     <div class="links">
       <a href="mentions-legales.html">Mentions légales</a>
       <a href="mailto:contact@tontonbusiness.com">contact@tontonbusiness.com</a>
