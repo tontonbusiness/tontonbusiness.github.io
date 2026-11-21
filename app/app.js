@@ -247,8 +247,8 @@ const after = {};
 const X = { attN:()=>attListe().length, attCheck:()=>attCheck(), catVeh, CAT_LIB, CAT_ORDRE, cmpTxt, views:{}, nav:null, onData:[], after, S, sb, $, esc, toast, errMsg, openModal, closeModal, render, loadData, EID, isStaff, frDate, todayIso, addDays };
 
 /* ---------- CONNEXION ---------- */
-function authShell(inner){ const img = MODE==="chauffeur" ? `<img src="icon-192.png" alt="" style="border-radius:12px">` : `<img src="../logo-blanc.png" alt="Mobilog">`;
-  return `<div class="auth"><div class="auth-card"><div class="logo">${img}<b>${APPNAME}</b></div>${inner}</div></div>`; }
+function authShell(inner){ const img = MODE==="chauffeur" ? `<img src="icon-192.png" alt="" style="border-radius:12px">` : `<img src="logo-or.png" alt="Tonton Business" style="width:100%;max-width:260px;border-radius:12px">`;
+  return `<div class="auth"><div class="auth-card"><div class="logo"${MODE==="chauffeur"?"":' style="flex-direction:column;align-items:center;gap:8px"'}>${img}<b>${APPNAME}</b></div>${inner}</div></div>`; }
 /* ---------- NOTIFICATIONS (Dream Chauffeur) ---------- */
 const pushOk = () => MODE==="chauffeur" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 const b64uOctets = s => { const t=atob(s.replace(/-/g,"+").replace(/_/g,"/")); return Uint8Array.from(t,ch=>ch.charCodeAt(0)); };
