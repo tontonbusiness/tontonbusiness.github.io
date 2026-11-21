@@ -29,7 +29,7 @@ header{border-bottom:1px solid var(--line);background:var(--n2)}
 .brand b{font-family:Archivo,Arial,sans-serif;font-weight:800;font-size:30px;line-height:1}
 .brand small{display:block;color:var(--mut);font-size:13px;margin-top:3px}
 .hero{background:radial-gradient(1200px 500px at 70% -10%,#17357a 0,transparent 60%),linear-gradient(180deg,var(--n1),var(--n2));padding-block:64px 40px}
-.hgrid{display:grid;grid-template-columns:1fr 1.25fr;gap:40px;align-items:center}
+.hgrid{display:grid;grid-template-columns:1fr 1.6fr;gap:40px;align-items:center}
 .hero h1{font-size:clamp(32px,5vw,50px);font-weight:800}
 .hero p.lead{font-size:19px;color:var(--mut);margin:18px 0 26px;max-width:46ch}
 .cta{display:flex;flex-wrap:wrap;gap:12px}
@@ -50,6 +50,15 @@ h2{font-size:clamp(26px,4vw,36px);font-weight:800;margin-bottom:12px}
 .list li::before{content:"✓";position:absolute;left:0;top:0;color:var(--g2);font-weight:800}
 .price{text-align:center}
 .price .box{max-width:720px;margin:0 auto;background:linear-gradient(180deg,var(--card),var(--n1));border:1.5px solid var(--g2);border-radius:18px;padding:34px 24px}
+
+.gal{display:grid;grid-template-columns:1fr;gap:24px}
+figure.shot{margin:0}figure.shot figcaption{padding:14px 18px 16px;background:var(--n1);color:var(--mut);font-size:15px;border-top:1px solid var(--line)}figure.shot figcaption b{color:var(--fg)}
+.df{display:grid;grid-template-columns:1fr 1fr;gap:14px;text-align:left}
+.df label{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--mut);font-weight:600}
+.df input,.df textarea{font:inherit;color:var(--fg);background:var(--n2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;min-height:44px}
+.df input:focus,.df textarea:focus{outline:3px solid #7FB3FF;outline-offset:1px}
+.df .full{grid-column:1/-1}.df .muted{color:var(--mut);font-size:13px;text-align:center}
+@media (max-width:640px){.df{grid-template-columns:1fr}}
 footer{padding-block:32px;border-top:1px solid var(--line);color:var(--mut);font-size:14px}
 .fl{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;align-items:center}
 @media (max-width:860px){.hgrid,.two{grid-template-columns:1fr}.hero{padding-block:40px 28px}section{padding-block:44px}}
@@ -58,7 +67,7 @@ footer{padding-block:32px;border-top:1px solid var(--line);color:var(--mut);font
 <body>
 <header><div class="wrap top">
   <a class="brand" href="./" aria-label="Mobilog par Tonton Business"><img src="logo-mobilog.png" alt="Mobilog par Tonton Business"></a>
-  <a class="btn" href="mailto:contact@tontonbusiness.com?subject=Demande%20de%20d%C3%A9mo%20Mobilog">Demander une démo</a>
+  <a class="btn" href="#demo">Demander une démo</a>
 </div></header>
 
 <main>
@@ -66,23 +75,32 @@ footer{padding-block:32px;border-top:1px solid var(--line);color:var(--mut);font
   <div>
     <h1>Le logiciel de <span class="gold">gestion du transport</span> de marchandises</h1>
     <p class="lead">Planifiez vos tournées, suivez vos courses, facturez vos clients et gardez un œil sur votre rentabilité. Depuis un navigateur, sur ordinateur comme sur téléphone.</p>
-    <div class="cta"><a class="btn" href="mailto:contact@tontonbusiness.com?subject=Demande%20de%20d%C3%A9mo%20Mobilog">Demander une démo</a><a class="btn ghost" href="#fonctions">Voir les fonctions</a></div>
+    <div class="cta"><a class="btn" href="#demo">Demander une démo</a><a class="btn ghost" href="#fonctions">Voir les fonctions</a></div>
   </div>
-  <div class="shot"><img src="ecran-planning.png" alt="Planning des tournées par conducteur dans Mobilog" width="1360" height="820"></div>
+  <div class="shot"><img src="zoom-planning.png" alt="Planning des tournées par conducteur dans Mobilog" width="2200" height="1280"></div>
 </div></div>
 
 <section id="fonctions"><div class="wrap">
   <h2>Tout ce qu'il faut pour <span class="gold">piloter votre exploitation</span></h2>
   <p class="sub">Des outils pensés pour les transporteurs, du premier ordre de transport à la facture.</p>
   <div class="grid">
-    <div class="card"><div class="ic">📅</div><h3>Planification des tournées</h3><p>Un planning par conducteur ou par véhicule, avec alertes de chevauchement et d'attente à la livraison.</p></div>
-    <div class="card"><div class="ic">🚚</div><h3>Suivi des courses en direct</h3><p>Enlèvement, chargé, livraison, livré : l'avancement de chaque course se met à jour au fil de la journée.</p></div>
-    <div class="card"><div class="ic">📱</div><h3>Application pour les chauffeurs</h3><p>Le conducteur reçoit son ordre sur son téléphone, valide chaque étape et joint ses documents.</p></div>
-    <div class="card"><div class="ic">🧾</div><h3>Devis et facturation</h3><p>Devis, factures et avoirs à votre image, avec votre logo et votre numérotation.</p></div>
-    <div class="card"><div class="ic">🤝</div><h3>Gestion des sous-traitants</h3><p>Confiez une course à un sous-traitant et suivez ce qui lui est dû, course par course.</p></div>
-    <div class="card"><div class="ic">📊</div><h3>Rapports et rentabilité</h3><p>Chiffre d'affaires, retards, temps passé sur place : les indicateurs pour décider.</p></div>
-    <div class="card"><div class="ic">📦</div><h3>Stockage et palettes</h3><p>Suivez les mouvements de palettes et facturez vos prestations de stockage.</p></div>
-    <div class="card"><div class="ic">⚖️</div><h3>Litiges et carnet d'adresses</h3><p>Gardez la trace des litiges par client et retrouvez vos contacts en un instant.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#0b1d42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg></div><h3>Planification des tournées</h3><p>Un planning par conducteur ou par véhicule, avec alertes de chevauchement et d'attente à la livraison.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#0b1d42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 6.5h11v9H2zM13 9.5h4l3 3v3h-7z"/><circle cx="6.5" cy="18" r="1.8"/><circle cx="16.5" cy="18" r="1.8"/></svg></div><h3>Suivi des courses en direct</h3><p>Enlèvement, chargé, livraison, livré : l'avancement de chaque course se met à jour au fil de la journée.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#0b1d42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/></svg></div><h3>Application pour les chauffeurs</h3><p>Le conducteur reçoit son ordre sur son téléphone, valide chaque étape et joint ses documents.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#0b1d42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5h12v19l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></div><h3>Devis et facturation</h3><p>Devis, factures et avoirs à votre image, avec votre logo et votre numérotation.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#0b1d42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M15.5 14.3c3 0 5.5 2.2 5.5 5.2"/></svg></div><h3>Gestion des sous-traitants</h3><p>Confiez une course à un sous-traitant et suivez ce qui lui est dû, course par course.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#0b1d42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div><h3>Rapports et rentabilité</h3><p>Chiffre d'affaires, retards, temps passé sur place : les indicateurs pour décider.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#0b1d42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"/></svg></div><h3>Stockage et palettes</h3><p>Suivez les mouvements de palettes et facturez vos prestations de stockage.</p></div>
+    <div class="card"><div class="ic"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#0b1d42" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M5 21h14M5 7h14"/><path d="M5 7l-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z"/></svg></div><h3>Litiges et carnet d'adresses</h3><p>Gardez la trace des litiges par client et retrouvez vos contacts en un instant.</p></div>
+  </div>
+</div></section>
+
+<section id="details"><div class="wrap">
+  <h2>Le détail <span class="gold">qui change la journée</span></h2>
+  <p class="sub">De vraies pages du logiciel, avec des données d'exemple.</p>
+  <div class="gal">
+    <figure class="shot"><img src="zoom-frise.png" alt="Frise d'avancement d'une course : enlèvement, chargé, livraison, livré" width="1672" height="484" loading="lazy"><figcaption><b>Chaque course, étape par étape.</b> Une animation montre la phase en cours : chargement, route, déchargement.</figcaption></figure>
+    <figure class="shot"><img src="zoom-courses.png" alt="Tuiles du jour, filtres et liste des courses" width="2200" height="840" loading="lazy"><figcaption><b>Vos chiffres du jour, vos filtres, votre export.</b> Statut, client, dates : retrouvez une course en quelques secondes et exportez la liste vers Excel.</figcaption></figure>
   </div>
 </div></section>
 
@@ -100,14 +118,29 @@ footer{padding-block:32px;border-top:1px solid var(--line);color:var(--mut);font
   </div>
 </div></section></div>
 
-<section class="price"><div class="wrap">
+<section class="price" id="demo"><div class="wrap">
   <div class="box">
     <h2>Une démo <span class="gold">à votre rythme</span></h2>
-    <p class="sub" style="margin:0 auto 24px">Mobilog est utilisé au quotidien par une société de transport pilote. Dites-nous comment vous travaillez : nous vous présentons le logiciel sur un exemple proche de votre activité et vous indiquons les conditions.</p>
-    <a class="btn" href="mailto:contact@tontonbusiness.com?subject=Demande%20de%20d%C3%A9mo%20Mobilog">Demander une démo</a>
+    <p class="sub" style="margin:0 auto 22px">Mobilog est utilisé au quotidien par une société de transport pilote. Dites-nous comment vous travaillez : nous vous présentons le logiciel sur un exemple proche de votre activité et vous indiquons les conditions.</p>
+    <form id="df" class="df" novalidate>
+      <label>Votre société<input name="soc" autocomplete="organization" required></label>
+      <label>Votre nom<input name="nom" autocomplete="name" required></label>
+      <label>Téléphone<input name="tel" type="tel" autocomplete="tel" required></label>
+      <label>Nombre de véhicules<input name="veh" inputmode="numeric" placeholder="ex. 12"></label>
+      <label class="full">Un mot sur votre activité (facultatif)<textarea name="msg" rows="3"></textarea></label>
+      <button class="btn full" type="submit">Envoyer ma demande de démo</button>
+      <p class="muted full" id="dmsg" role="status">Votre messagerie s'ouvrira avec votre demande déjà rédigée : il vous reste à l'envoyer. Vous pouvez aussi écrire directement à <a href="mailto:contact@tontonbusiness.com">contact@tontonbusiness.com</a>.</p>
+    </form>
   </div>
 </div></section>
 </main>
 
 <footer><div class="wrap fl"><span>© Tonton Business · Mobilog</span><span><a href="../mentions-legales.html">Mentions légales</a> · <a href="mailto:contact@tontonbusiness.com">contact@tontonbusiness.com</a></span></div></footer>
+<script>
+document.getElementById("df").addEventListener("submit",function(e){e.preventDefault();var f=e.target,v=function(n){return (f.elements[n].value||"").trim()};
+ var m=document.getElementById("dmsg"); if(!v("soc")||!v("nom")||!v("tel")){m.textContent="Merci de renseigner votre société, votre nom et votre téléphone.";m.style.color="#F2CB62";return;}
+ var body="Bonjour,\n\nJe souhaite une démo de Mobilog.\n\nSociété : "+v("soc")+"\nNom : "+v("nom")+"\nTéléphone : "+v("tel")+"\nNombre de véhicules : "+(v("veh")||"non précisé")+"\n\n"+(v("msg")||"")+"\n";
+ window.location.href="mailto:contact@tontonbusiness.com?subject="+encodeURIComponent("Demande de démo Mobilog - "+v("soc"))+"&body="+encodeURIComponent(body);
+ m.style.color="";m.textContent="Votre messagerie devrait s'ouvrir avec votre demande. Sinon, écrivez-nous à contact@tontonbusiness.com.";});
+</script>
 </body></html>
