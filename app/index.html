@@ -70,10 +70,13 @@ h1,h2,h3{text-wrap:balance;margin:0}
 /* identité Mobilog : barre latérale bleu nuit et or, nom du client dans la pastille */
 .side{background:linear-gradient(180deg,#0b1d42 0%,#061230 100%);--side-hi:#13294f;--side-muted:#AEB9D1}
 .brand{flex-direction:column;align-items:center;gap:6px;text-align:center;cursor:pointer}
-.brand img{width:62%;height:auto;border-radius:0}
+.brand{position:relative;flex-direction:column;align-items:center;gap:0;padding:0 2px;cursor:pointer}
+.brand img.lk{width:100%;height:auto;border-radius:0;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+.brand .par{align-self:center;width:100%;text-align:center;font-size:12px;font-style:italic;color:#DCE4F5;margin-top:-4px}.brand .par b{display:inline;font-family:inherit;font-size:inherit;color:#fff;font-weight:700}
+.brand .pill{align-self:center;margin-top:10px;font-size:15px;padding:7px 30px;text-transform:uppercase;letter-spacing:.05em}
 .brand b.mobi{font-family:var(--display);font-weight:800;font-size:34px;line-height:1;letter-spacing:.01em;background:linear-gradient(180deg,#FFE9A0 0%,#E9B73C 45%,#B27A12 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;filter:drop-shadow(0 2px 2px rgba(0,0,0,.45))}
 .brand .pill{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.04em;padding:5px 16px;border-radius:999px;color:#1A1405;background:linear-gradient(180deg,#F8DB80,#D9A62E);box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 2px 6px rgba(0,0,0,.35);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.side .btn-accent{background:linear-gradient(180deg,#F2CB62,#C4902A);color:#1A1405;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.side .btn-accent{min-height:48px;font-size:16px;background:linear-gradient(180deg,#F2CB62,#C4902A);color:#1A1405;box-shadow:0 2px 8px rgba(0,0,0,.35)}
 
 .btn{border:0;border-radius:10px;padding:10px 14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;justify-content:center;min-height:40px;text-decoration:none}
 .btn-accent{background:var(--accent);color:var(--on-accent)}
@@ -81,6 +84,7 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .btn-navy{background:var(--side);color:var(--side-fg)}
 .btn-danger{background:var(--danger-soft);color:var(--danger);border:1px solid var(--danger)}
 .btn-sm{min-height:32px;padding:6px 10px;font-size:13px;border-radius:8px}
+.side .btn-import span{text-align:left;line-height:1.25}
 .side .btn-import{background:var(--side-hi);color:var(--side-fg);border:1px dashed var(--side-muted)}
 .nav{display:flex;flex-direction:column;gap:2px}
 .nav .grp{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--side-muted);padding:12px 10px 4px}
@@ -182,6 +186,19 @@ h1,h2,h3{text-wrap:balance;margin:0}
 input[type=search],input[type=text],input[type=email],input[type=password],input[type=date],input[type=time],input[type=number],input[type=tel],select,textarea{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;min-height:38px;width:100%}
 textarea{min-height:70px;resize:vertical}
 .tbl-wrap{overflow-x:auto}
+/* page Courses : tuiles du jour et en-tête de tableau bleu nuit */
+.ktiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.kt{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;border:1px solid;box-shadow:0 2px 8px rgba(20,30,50,.08)}
+.kt .kic{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;flex:none;background:rgba(255,255,255,.65)}
+.kt small{display:block;font-size:13px;font-weight:600;color:var(--fg)}
+.kt b{font-family:var(--display);font-size:30px;line-height:1.1;color:var(--fg)}
+.kt.kj{background:var(--run-bg);border-color:var(--run-bd)} .kt.kj .kic{color:var(--run-bd)}
+.kt.kf{background:var(--done-bg);border-color:var(--done-bd)} .kt.kf .kic{color:var(--done-bd)}
+.kt.kr{background:var(--sent-bg);border-color:var(--sent-bd)} .kt.kr .kic{color:var(--sent-bd)}
+.kt.kx{background:var(--danger-soft);border-color:var(--danger)} .kt.kx .kic{color:var(--danger)}
+table.tcourses thead th{background:#0b1d42;color:#F1F4FB;border-bottom:0}
+table.tcourses thead th:first-child{border-top-left-radius:10px} table.tcourses thead th:last-child{border-top-right-radius:10px}
+
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;font-size:12px;color:var(--muted);font-weight:700;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
 td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -325,10 +342,10 @@ button,a,label,[role=button],.btn,.card,.blk,tr.click{touch-action:manipulation}
 <body>
 <div class="app" id="app">
   <aside class="side" id="side" hidden>
-    <div class="brand" data-home role="link" tabindex="0" title="Retour à l'accueil"><img src="logo-tb-or.png" alt="Tonton Business"><b class="mobi">Mobilog</b><span class="pill" id="coName">Exploitation</span></div>
+    <div class="brand" data-home role="link" tabindex="0" title="Retour à l'accueil"><img class="lk" src="logo-mobilog.png" alt="Mobilog"><span class="pill" id="coName">Exploitation</span></div>
     <div class="acts" style="display:flex;flex-direction:column;gap:8px">
-      <button class="btn btn-accent" type="button" data-act="new">+ Nouvelle course</button>
-      <button class="btn btn-import" type="button" data-act="import">Importer une confirmation PDF</button>
+      <button class="btn btn-accent" type="button" data-act="new"><span style="font-size:26px;font-weight:500;line-height:1;margin-right:6px">+</span> Nouvelle course</button>
+      <button class="btn btn-import" type="button" data-act="import"><svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.5h8l5 5V21.5H6z"/><path d="M14 2.5v5h5"/><text x="12.5" y="17.4" font-size="6.2" font-weight="800" fill="#FFFFFF" stroke="none" text-anchor="middle" font-family="Arial,sans-serif">PDF</text></svg><span>Importer une<br>confirmation PDF</span></button>
     </div>
     <nav class="nav" id="nav" aria-label="Menu"></nav>
     <div class="foot"><span id="whoami"></span><button type="button" data-act="logout">Se déconnecter</button></div>
@@ -341,7 +358,7 @@ button,a,label,[role=button],.btn,.card,.blk,tr.click{touch-action:manipulation}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=36"></script>
+<script src="app.js?v=44"></script>
 <script src="factu.js?v=28"></script>
 <script src="litiges.js?v=1"></script>
 <script src="stockage.js?v=1"></script>
