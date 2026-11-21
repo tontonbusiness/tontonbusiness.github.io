@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mobilog – Logiciel de gestion du transport de marchandises | Tonton Business</title>
+<meta name="description" content="Mobilog : planifiez vos tournées, suivez vos courses, facturez et mesurez votre rentabilité. Un logiciel de gestion pour transporteurs, utilisable sur ordinateur et téléphone.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="../app/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root{--n1:#0b1d42;--n2:#061230;--n3:#13294f;--g1:#F8DB80;--g2:#E9B73C;--g3:#B27A12;--fg:#EEF2FA;--mut:#AEB9D1;--card:#0f2250;--line:#24407a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--n2);color:var(--fg);font-family:Inter,Arial,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:Archivo,Arial,sans-serif;margin:0;line-height:1.12;text-wrap:balance}
+p{margin:0}a{color:var(--g1)}
+.wrap{max-width:1140px;margin:0 auto;padding:0 max(20px,env(safe-area-inset-left,0px))}
+.gold{background:linear-gradient(180deg,var(--g1),var(--g2) 50%,var(--g3));-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:12px 24px;border-radius:12px;font-weight:700;text-decoration:none;color:#1A1405;background:linear-gradient(180deg,#F2CB62,#C4902A);box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.btn:hover{filter:brightness(1.07);color:#1A1405}
+.btn.ghost{background:transparent;color:var(--g1);border:1.5px solid var(--g2);box-shadow:none}
+.btn:focus-visible,a:focus-visible{outline:3px solid #7FB3FF;outline-offset:3px}
+header{border-bottom:1px solid var(--line);background:var(--n2)}
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;padding-block:14px}
+.brand{display:flex;align-items:center;gap:14px;text-decoration:none}
+.brand img{height:62px;width:auto;display:block}
+.brand b{font-family:Archivo,Arial,sans-serif;font-weight:800;font-size:30px;line-height:1}
+.brand small{display:block;color:var(--mut);font-size:13px;margin-top:3px}
+.hero{background:radial-gradient(1200px 500px at 70% -10%,#17357a 0,transparent 60%),linear-gradient(180deg,var(--n1),var(--n2));padding-block:64px 40px}
+.hgrid{display:grid;grid-template-columns:1fr 1.25fr;gap:40px;align-items:center}
+.hero h1{font-size:clamp(32px,5vw,50px);font-weight:800}
+.hero p.lead{font-size:19px;color:var(--mut);margin:18px 0 26px;max-width:46ch}
+.cta{display:flex;flex-wrap:wrap;gap:12px}
+.shot{border-radius:14px;border:1px solid var(--line);box-shadow:0 24px 60px rgba(0,0,0,.55);overflow:hidden;background:#000}
+.shot img{display:block;width:100%;height:auto}
+section{padding-block:60px}
+h2{font-size:clamp(26px,4vw,36px);font-weight:800;margin-bottom:12px}
+.sub{color:var(--mut);max-width:60ch;margin-bottom:32px;font-size:17px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.card{background:linear-gradient(180deg,var(--card),var(--n1));border:1px solid var(--line);border-radius:14px;padding:20px 20px 22px}
+.card .ic{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font-size:21px;background:linear-gradient(180deg,#F8DB80,#D9A62E);margin-bottom:12px}
+.card h3{font-size:18px;margin-bottom:6px}
+.card p{color:var(--mut);font-size:15px}
+.band{background:var(--n1);border-block:1px solid var(--line)}
+.two{display:grid;grid-template-columns:1.2fr 1fr;gap:36px;align-items:center}
+.list{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.list li{padding-left:30px;position:relative;color:var(--fg)}
+.list li::before{content:"✓";position:absolute;left:0;top:0;color:var(--g2);font-weight:800}
+.price{text-align:center}
+.price .box{max-width:720px;margin:0 auto;background:linear-gradient(180deg,var(--card),var(--n1));border:1.5px solid var(--g2);border-radius:18px;padding:34px 24px}
+footer{padding-block:32px;border-top:1px solid var(--line);color:var(--mut);font-size:14px}
+.fl{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;align-items:center}
+@media (max-width:860px){.hgrid,.two{grid-template-columns:1fr}.hero{padding-block:40px 28px}section{padding-block:44px}}
+</style>
+</head>
+<body>
+<header><div class="wrap top">
+  <a class="brand" href="./" aria-label="Mobilog par Tonton Business"><img src="logo-mobilog.png" alt="Mobilog par Tonton Business"></a>
+  <a class="btn" href="mailto:contact@tontonbusiness.com?subject=Demande%20de%20d%C3%A9mo%20Mobilog">Demander une démo</a>
+</div></header>
+
+<main>
+<div class="hero"><div class="wrap hgrid">
+  <div>
+    <h1>Le logiciel de <span class="gold">gestion du transport</span> de marchandises</h1>
+    <p class="lead">Planifiez vos tournées, suivez vos courses, facturez vos clients et gardez un œil sur votre rentabilité. Depuis un navigateur, sur ordinateur comme sur téléphone.</p>
+    <div class="cta"><a class="btn" href="mailto:contact@tontonbusiness.com?subject=Demande%20de%20d%C3%A9mo%20Mobilog">Demander une démo</a><a class="btn ghost" href="#fonctions">Voir les fonctions</a></div>
+  </div>
+  <div class="shot"><img src="ecran-planning.png" alt="Planning des tournées par conducteur dans Mobilog" width="1360" height="820"></div>
+</div></div>
+
+<section id="fonctions"><div class="wrap">
+  <h2>Tout ce qu'il faut pour <span class="gold">piloter votre exploitation</span></h2>
+  <p class="sub">Des outils pensés pour les transporteurs, du premier ordre de transport à la facture.</p>
+  <div class="grid">
+    <div class="card"><div class="ic">📅</div><h3>Planification des tournées</h3><p>Un planning par conducteur ou par véhicule, avec alertes de chevauchement et d'attente à la livraison.</p></div>
+    <div class="card"><div class="ic">🚚</div><h3>Suivi des courses en direct</h3><p>Enlèvement, chargé, livraison, livré : l'avancement de chaque course se met à jour au fil de la journée.</p></div>
+    <div class="card"><div class="ic">📱</div><h3>Application pour les chauffeurs</h3><p>Le conducteur reçoit son ordre sur son téléphone, valide chaque étape et joint ses documents.</p></div>
+    <div class="card"><div class="ic">🧾</div><h3>Devis et facturation</h3><p>Devis, factures et avoirs à votre image, avec votre logo et votre numérotation.</p></div>
+    <div class="card"><div class="ic">🤝</div><h3>Gestion des sous-traitants</h3><p>Confiez une course à un sous-traitant et suivez ce qui lui est dû, course par course.</p></div>
+    <div class="card"><div class="ic">📊</div><h3>Rapports et rentabilité</h3><p>Chiffre d'affaires, retards, temps passé sur place : les indicateurs pour décider.</p></div>
+    <div class="card"><div class="ic">📦</div><h3>Stockage et palettes</h3><p>Suivez les mouvements de palettes et facturez vos prestations de stockage.</p></div>
+    <div class="card"><div class="ic">⚖️</div><h3>Litiges et carnet d'adresses</h3><p>Gardez la trace des litiges par client et retrouvez vos contacts en un instant.</p></div>
+  </div>
+</div></section>
+
+<div class="band"><section><div class="wrap two">
+  <div class="shot"><img src="ecran-courses.png" alt="Liste des courses avec statuts et prix dans Mobilog" width="1360" height="820" loading="lazy"></div>
+  <div>
+    <h2>Toutes vos courses, <span class="gold">d'un coup d'œil</span></h2>
+    <p class="sub" style="margin-bottom:20px">Statut, donneur d'ordre, lieux, horaires, conducteur et prix sur une seule page, avec recherche et filtres.</p>
+    <ul class="list">
+      <li>Importez une confirmation de transport en PDF</li>
+      <li>Dupliquez une course en quelques clics</li>
+      <li>Envoyez l'ordre au conducteur ou à un sous-traitant</li>
+      <li>Passez de la course terminée à la facture</li>
+    </ul>
+  </div>
+</div></section></div>
+
+<section class="price"><div class="wrap">
+  <div class="box">
+    <h2>Une démo <span class="gold">à votre rythme</span></h2>
+    <p class="sub" style="margin:0 auto 24px">Mobilog est utilisé au quotidien par une société de transport pilote. Dites-nous comment vous travaillez : nous vous présentons le logiciel sur un exemple proche de votre activité et vous indiquons les conditions.</p>
+    <a class="btn" href="mailto:contact@tontonbusiness.com?subject=Demande%20de%20d%C3%A9mo%20Mobilog">Demander une démo</a>
+  </div>
+</div></section>
+</main>
+
+<footer><div class="wrap fl"><span>© Tonton Business · Mobilog</span><span><a href="../mentions-legales.html">Mentions légales</a> · <a href="mailto:contact@tontonbusiness.com">contact@tontonbusiness.com</a></span></div></footer>
+</body></html>
