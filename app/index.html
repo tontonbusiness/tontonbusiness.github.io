@@ -186,6 +186,26 @@ h1,h2,h3{text-wrap:balance;margin:0}
 input[type=search],input[type=text],input[type=email],input[type=password],input[type=date],input[type=time],input[type=number],input[type=tel],select,textarea{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;min-height:38px;width:100%}
 textarea{min-height:70px;resize:vertical}
 .tbl-wrap{overflow-x:auto}
+/* barre de filtres et actions de ligne (page Courses) */
+.frow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.fsel select{min-width:190px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--fg);font-weight:500}
+.fbtn{min-height:40px;padding:8px 12px}.fexp{padding:8px 16px}
+.sr{position:absolute;left:-9999px}
+td.acts{white-space:nowrap;text-align:right;cursor:default;position:relative}
+.ib{display:inline-grid;place-items:center;width:30px;height:30px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--fg);cursor:pointer;font-size:18px;line-height:1;list-style:none;vertical-align:middle}
+.ib:hover{background:var(--surface-2)}
+details.rowm{display:inline-block;position:relative;margin-left:4px;vertical-align:middle}
+details.rowm>summary::-webkit-details-marker{display:none}
+.rowm-pop{position:absolute;right:0;top:34px;z-index:20;min-width:150px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(20,30,50,.18);padding:4px;display:flex;flex-direction:column;text-align:left}
+.rowm-pop button{border:0;background:transparent;text-align:left;padding:9px 12px;border-radius:7px;font:inherit;color:var(--fg);cursor:pointer}
+.rowm-pop button:hover{background:var(--accent-soft)}
+/* menu latéral : entrée active en bleu vif, icônes plus grandes */
+.nav a.on{background:#1f5fe0;color:#fff;box-shadow:0 0 0 1.5px #7FB3FF inset}
+.nav a.on .ni-i{filter:brightness(2.4) saturate(.4)}
+.nav .ni-i{width:23px;height:23px}
+.nav a.sub .cnt{background:rgba(255,255,255,.14);color:#EAF0FF;border-radius:999px;min-width:26px;text-align:center;padding:1px 9px;font-weight:700}
+.nav a.sub .cnt.hot{background:#F2CB62;color:#1A1405}
+
 /* page Courses : tuiles du jour et en-tête de tableau bleu nuit */
 .ktiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
 .kt{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;border:1px solid;box-shadow:0 2px 8px rgba(20,30,50,.08)}
@@ -196,6 +216,8 @@ textarea{min-height:70px;resize:vertical}
 .kt.kf{background:var(--done-bg);border-color:var(--done-bd)} .kt.kf .kic{color:var(--done-bd)}
 .kt.kr{background:var(--sent-bg);border-color:var(--sent-bd)} .kt.kr .kic{color:var(--sent-bd)}
 .kt.kx{background:var(--danger-soft);border-color:var(--danger)} .kt.kx .kic{color:var(--danger)}
+table.tcourses th,table.tcourses td{padding-left:8px;padding-right:8px}
+table.tcourses td.acts{padding-left:4px;padding-right:10px;width:84px}
 table.tcourses thead th{background:#0b1d42;color:#F1F4FB;border-bottom:0}
 table.tcourses thead th:first-child{border-top-left-radius:10px} table.tcourses thead th:last-child{border-top-right-radius:10px}
 
@@ -358,7 +380,7 @@ button,a,label,[role=button],.btn,.card,.blk,tr.click{touch-action:manipulation}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js?v=4"></script>
-<script src="app.js?v=44"></script>
+<script src="app.js?v=45"></script>
 <script src="factu.js?v=28"></script>
 <script src="litiges.js?v=1"></script>
 <script src="stockage.js?v=1"></script>

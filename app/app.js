@@ -30,7 +30,7 @@ const TIME_KEYS = ["enlHeure","enlHeureFin","livHeure","livHeureFin","arriveeEnl
 
 /* ---------- état ---------- */
 const S = { session:null, mem:null, entreprise:null, courses:[], conducteurs:[], camions:[], remorques:[], membres:[], loaded:false,
-  view:"planning", date: todayIso(), mode:"conducteur", fStatut:"tous", fQ:"", fPeriode:"tout", fDate:"", fDate2:"",
+  view:"planning", date: todayIso(), mode:"conducteur", fStatut:"tous", fClient:"", fQ:"", fPeriode:"tout", fDate:"", fDate2:"",
   iPeriode:"30", iCond:"", iDonneur:"", me: store.get("tp_me") || "", drvDay:"today", reserveFor:null,
   importList:null, importDoc:null, authMode:"login", authErr:"", recovery:false,
   openJobs:new Set(), doneFor:null, sign:null, incType:null, incN:null };
@@ -516,6 +516,7 @@ function vCourses(){
   const q=S.fQ.trim().toLowerCase(); const t=todayIso();
   let list=S.courses.slice();
   if(S.fStatut==="afacturer") list=list.filter(aFacturer); else if(S.fStatut!=="tous") list=list.filter(c=>c.statut===S.fStatut);
+  if(S.fClient) list=list.filter(c=>(c.donneur||"").trim()===S.fClient);
   if(S.fDate){ const a=S.fDate, b=(S.fDate2&&S.fDate2>=S.fDate)?S.fDate2:S.fDate;
     list=list.filter(c=>{ const e=c.enlDate||"", l=c.livDate||c.enlDate||""; return (e>=a&&e<=b)||(l>=a&&l<=b); }); }
   if(S.fPeriode==="jour") list=list.filter(c=>c.enlDate===t);
@@ -523,8 +524,12 @@ function vCourses(){
   if(q) list=list.filter(c=>[c.donneur,c.ref,c.enlVille,c.livVille,c.enlNom,c.livNom,condName(c.conducteurId),camName(c.camionId),remName(c.remorqueId),c.marchandise].join(" ").toLowerCase().includes(q));
   list.sort((a,b)=>(b.enlDate||"").localeCompare(a.enlDate||"") || (toMin(a.enlHeure)||0)-(toMin(b.enlHeure)||0));
   const cnt=st=> st==="tous"?S.courses.length: st==="afacturer"?S.courses.filter(aFacturer).length : S.courses.filter(c=>c.statut===st).length;
-  const chips=[["tous","Toutes"],["a_planifier","À planifier"],["planifiee","Planifiées"],["envoyee","Envoyées"],["en_cours","En cours"],["terminee","Terminées"],["afacturer","À facturer"],["annulee","Annulées"]]
-    .map(([k,l])=>`<button type="button" class="f ${S.fStatut===k?"on":""}" data-fst="${k}">${l} <span class="num">${cnt(k)}</span></button>`).join("");
+  const stSel=`<label class="fsel"><span class="sr">Statut</span><select id="fStSel">${[["tous","Tous les statuts"],["a_planifier","À planifier"],["planifiee","Planifiées"],["envoyee","Envoyées"],["en_cours","En cours"],["terminee","Terminées"],["afacturer","À facturer"],["annulee","Annulées"]].map(([k,l])=>`<option value="${k}" ${S.fStatut===k?"selected":""}>${l} (${cnt(k)})</option>`).join("")}</select></label>`;
+  const cls=[...new Set(S.courses.map(c=>(c.donneur||"").trim()).filter(Boolean))].sort((x,y)=>x.localeCompare(y));
+  const clSel=`<label class="fsel"><span class="sr">Client</span><select id="fClSel"><option value="">Tous les clients</option>${cls.map(n=>`<option value="${esc(n)}" ${S.fClient===n?"selected":""}>${esc(n)}</option>`).join("")}</select></label>`;
+  const IC_REF='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>', IC_EXP='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 20h16"/></svg>', IC_EYE='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  S._expList=list;
+  const chips=`<div class="frow">${stSel}${clSel}<button type="button" class="btn btn-ghost fbtn" data-act="refresh" title="Actualiser la liste" aria-label="Actualiser la liste">${IC_REF}</button><button type="button" class="btn btn-navy fbtn fexp" data-act="export">${IC_EXP} Exporter</button></div>`;
   const rows=list.slice(0,300).map(c=>{ const m=[c.palettes&&c.palettes+" pal.",c.colis&&c.colis+" colis",c.poids&&Number(c.poids).toLocaleString("fr-FR")+" kg",c.metres&&c.metres+" m"].filter(Boolean).join(", ");
     return `<tr class="click strow" style="--st-c:var(--${({planifiee:"plan",envoyee:"sent",en_cours:"run",route:"run",chg:"chg",liv:"liv",terminee:"done"})[etape(c)]||"off"}-bd)" data-open="${esc(c.id)}" tabindex="0"><td>${statChip(c)}</td>
     <td><b>${esc(c.donneur||"—")}</b>${c.ref?`<div class="muted">Réf. ${esc(c.ref)}</div>`:""}</td>
@@ -534,7 +539,8 @@ function vCourses(){
     <td class="num">${esc(shortDate(c.livDate||c.enlDate))} ${esc(c.livHeure||"")}${c.livre?`<div class="muted">Réel : ${esc(c.livre)}</div>`:""}</td>
     <td>${esc(m||c.marchandise||"")}</td>
     <td>${esc(condName(c.conducteurId)||"—")}<div class="muted">${esc(vehLabel(c))}</div></td>
-    <td class="r num"><b>${c.prix?eur(c.prix):"—"}</b>${c.facturee?`<div class="muted">Facturée</div>`:""}</td></tr>`; }).join("");
+    <td class="r num"><b>${c.prix?eur(c.prix):"—"}</b>${c.facturee?`<div class="muted">Facturée</div>`:""}</td>
+    <td class="acts" data-act="noop"><button type="button" class="ib" data-open="${esc(c.id)}" title="Ouvrir la course" aria-label="Ouvrir la course">${IC_EYE}</button><details class="rowm"><summary class="ib" title="Autres actions" aria-label="Autres actions">⋯</summary><div class="rowm-pop"><button type="button" data-open="${esc(c.id)}">Ouvrir</button>${c.statut==="annulee"?"":`<button type="button" data-r="dup" data-id="${esc(c.id)}">Dupliquer…</button>`}</div></details></td></tr>`; }).join("");
   const actives=S.courses.filter(c=>c.statut!=="annulee");
   const nJour=actives.filter(c=>c.enlDate===t||c.livDate===t).length, nFin=S.courses.filter(c=>c.statut==="terminee"&&((c.livDate||c.enlDate)===t)).length, nRun=cnt("en_cours"), nTr=cnt("a_planifier")+S.courses.filter(c=>c.statut!=="annulee"&&incNew(c).length).length;
   const IC={jour:'<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h11v9H2zM13 9h4l3 3v3h-7zM6 18.5a1.5 1.5 0 1 0 0-.01M17 18.5a1.5 1.5 0 1 0 0-.01"/></svg>',fin:'<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>',run:'<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',tr:'<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18.5v.01"/></svg>'};
@@ -555,7 +561,7 @@ function vCourses(){
      const ne=act.filter(c=>c.enlDate>=a&&c.enlDate<=b).length, nl=act.filter(c=>{ const l=c.livDate||c.enlDate||""; return l>=a&&l<=b; }).length, tot=act.reduce((x,c)=>x+(Number(c.prix)||0),0);
      const lib = a===b ? frDate(a,{weekday:"long",day:"numeric",month:"long",year:"numeric"}) : "du "+frDate(a,{day:"numeric",month:"long",year:"numeric"})+" au "+frDate(b,{day:"numeric",month:"long",year:"numeric"});
      return `<div class="banner" role="status"><span><b>${esc(lib)}</b> : ${act.length} course${act.length>1?"s":""} (${ne} enlèvement${ne>1?"s":""}, ${nl} livraison${nl>1?"s":""}) · ${eur(tot)} HT</span></div>`; })():""}
-  <div class="panel tbl-wrap">${list.length?`<table class="tcourses"><thead><tr><th>Statut</th><th>Donneur d'ordre</th><th>Enlèvement</th><th>Date d'enlèvement</th><th>Livraison</th><th>Date de livraison</th><th>Marchandises</th><th>Conducteur · véhicule</th><th class="r">Prix HT</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">${S.fDate?"Aucune course (enlèvement ou livraison) sur cette période.":"Aucune course pour le moment. Créez une course ou importez une confirmation PDF."}</div>`}</div>`;
+  <div class="panel tbl-wrap">${list.length?`<table class="tcourses"><thead><tr><th>Statut</th><th>Donneur d'ordre</th><th>Enlèvement</th><th>Date d'enlèvement</th><th>Livraison</th><th>Date de livraison</th><th>Marchandises</th><th>Conducteur · véhicule</th><th class="r">Prix HT</th><th aria-label="Actions"></th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="empty">${S.fDate?"Aucune course (enlèvement ou livraison) sur cette période.":"Aucune course pour le moment. Créez une course ou importez une confirmation PDF."}</div>`}</div>`;
 }
 function statChip(c){ const st=c.statut||"a_planifier"; const et=etape(c); let x=`<span class="chip st-${esc(et)}">${esc(etapeLib(c))}</span>`; if(ETAPES[et] && c[ETAPES[et].h]) x+=`<div class="muted" style="font-size:12px;margin-top:3px">depuis ${esc(c[ETAPES[et].h])}</div>`;
   if(c.reserve) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Réserve</span></div>`;
@@ -565,7 +571,18 @@ function statChip(c){ const st=c.statut||"a_planifier"; const et=etape(c); let x
   if(incNew(c).length) x+=`<div style="margin-top:4px"><span class="chip" style="border-color:var(--danger);color:var(--danger)">Problème signalé</span></div>`;
   if(c.modifieApresEnvoi && st==="envoyee") x+=`<div class="muted" style="font-size:11px;margin-top:3px">Modifiée après envoi</div>`;
   return x; }
-after.courses = ()=>{ const okD=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)?v:""; const fd=$("#fDate"), fd2=$("#fDate2");
+function exportCourses(){
+  const L=(S._expList||[]); if(!L.length){ toast("Aucune course à exporter"); return; }
+  const q=v=>{ v=(v==null?"":String(v)); return /[;"\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const head=["Statut","Donneur d'ordre","Référence","Enlèvement","Date d'enlèvement","Livraison","Date de livraison","Marchandises","Conducteur","Véhicule","Prix HT (€)"];
+  const rows=L.map(c=>[etapeLib(c),c.donneur,c.ref,[c.enlNom,c.enlCp,c.enlVille].filter(Boolean).join(" "),(c.enlDate||"")+" "+(c.enlHeure||""),[c.livNom,c.livCp,c.livVille].filter(Boolean).join(" "),(c.livDate||c.enlDate||"")+" "+(c.livHeure||""),c.marchandise||"",condName(c.conducteurId)||"",vehLabel(c)||"",c.prix?String(Number(c.prix)).replace(".",","):""].map(v=>q(typeof v==="string"?v.trim():v)).join(";"));
+  const blob=new Blob(["\ufeff"+[head.map(q).join(";"),...rows].join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="courses-"+todayIso()+".csv"; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },500);
+  toast(L.length+" course"+(L.length>1?"s":"")+" exportée"+(L.length>1?"s":"")+" (fichier ouvrable avec Excel)");
+}
+after.courses = ()=>{
+  const fs_=$("#fStSel"); if(fs_) fs_.addEventListener("change",()=>{ S.fStatut=fs_.value; render(); });
+  const fc_=$("#fClSel"); if(fc_) fc_.addEventListener("change",()=>{ S.fClient=fc_.value; render(); }); const okD=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)?v:""; const fd=$("#fDate"), fd2=$("#fDate2");
   if(fd) fd.addEventListener("change",()=>{ S.fDate=okD(fd.value); if(!S.fDate) S.fDate2=""; else S.fPeriode="tout"; render(); });
   if(fd2) fd2.addEventListener("change",()=>{ const v=okD(fd2.value); S.fDate2=v; if(v){ S.fPeriode="tout"; if(!S.fDate) S.fDate=v; else if(v<S.fDate){ S.fDate2=S.fDate; S.fDate=v; } } render(); }); const q=$("#fQ"); if(q){ q.addEventListener("input",()=>{ S.fQ=q.value; const pos=q.selectionStart; render(); const n=$("#fQ"); n.focus(); try{n.setSelectionRange(pos,pos);}catch(e){} }); }
   document.querySelectorAll("tr[data-open]").forEach(tr=>tr.addEventListener("keydown",e=>{ if(e.key==="Enter") openCourse(tr.dataset.open); })); };
@@ -1147,6 +1164,8 @@ document.addEventListener("click",async e=>{
   if(d.auth){ S.authMode=d.auth; S.authErr=""; render(); return; }
   if(d.act==="logout"){ if(channel) sb.removeChannel(channel); await sb.auth.signOut(); S.mem=null; S.session=null; S.loaded=false; closeModal(); render(); return; }
   if(d.act==="refresh"){ loadData(); return; }
+  if(d.act==="noop") return;
+  if(d.act==="export"){ exportCourses(); return; }
   if(d.act==="new"){ closeModal(); newCourse(); }
   else if(d.act==="import"){ startImport(); }
   else if(d.act==="close"){ closeModal(); }
