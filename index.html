@@ -208,6 +208,34 @@ html,body{margin:0;width:100%;max-width:100%;overflow-x:clip}
 /* Option 1 validée : plaque blanche uniquement derrière le logo officiel. */
 header .logo{background:#fff;border-radius:12px;padding:5px 12px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 header .logo img{display:block;max-width:100%;object-fit:contain}
+/* TEST HARMONISATION KIT — bleu nuit et or, sans toucher à MOBILOG */
+:root{--kit-gold:#F4C55D;--kit-gold-dark:#DDA72E}
+.kit-hero{background:#102746}
+.kit-hero .kicker{color:var(--kit-gold)}
+.kit-hero .badge{background:rgba(244,197,93,.12);border-color:rgba(244,197,93,.65);color:#FFE5A2}
+.kit-hero .btn,.final .btn{background:linear-gradient(180deg,#FFE397,#E6AA2F);color:#142840}
+.kit-hero .btn:hover,.final .btn:hover{background:var(--kit-gold);color:#142840}
+.kit-intro .section-kicker{color:#9A6A14}
+#contenu .feature svg{stroke:#B28222}
+#fonctionnement .num{color:#A7761D}
+.final{background:#102746}
+.mobi-card{border-left-color:var(--kit-gold)}
+/* Finition : accents du Kit harmonisés, indicateurs métier préservés. */
+#contenu .feature svg{stroke:#A7791F}
+#fonctionnement .num{color:#A7791F}
+.kit-hero .badge{border-color:#E7B74E}
+.kit-hero .video-wrap video{border-color:rgba(244,197,93,.48)}
+.kit-intro .section-kicker{color:#8D6218}
+/* Ne pas recolorer les pixels de la vidéo validée V4. */
+
+/* Version test : finitions harmonisées, sans modifier les indicateurs métier */
+.kit-intro a:hover {color:#a7761d}
+.kit-hero .cta-row .btn, .final .btn {box-shadow:0 8px 22px rgba(0,0,0,.18)}
+.kit-hero .video-wrap {border-color:rgba(244,197,93,.28)}
+#fonctionnement .num {color:#a7761d}
+@media(max-width:520px) {
+  .kit-hero .cta-row .btn {width:100%;text-align:center}
+}
 </style>
 </head>
 <body>
