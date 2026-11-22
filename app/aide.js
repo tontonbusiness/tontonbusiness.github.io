@@ -113,13 +113,32 @@ function dessine(){
    <div class="ab" id="aideBody">${corps}</div>${pied}`;
   const b=document.getElementById("aideBody"); if(onglet==="aide") b.scrollTop=b.scrollHeight;
 }
-function repond(q){
-  hist.push({r:"me",html:esc(q)});
+function locale(q){
   const r=cherche(q);
   if(!r.length) hist.push({r:"bot",html:`Je n'ai pas trouvé de réponse à cette question dans le guide. Essayez avec d'autres mots, ouvrez l'onglet <b>Guide</b>, ou <button type="button" class="bl" data-ao="sig">signalez-le à l'équipe</button>.`});
-  else r.forEach((g,i)=>hist.push({r:"bot",html:`<h4>${g.t}</h4>${g.h}`}));
-  if(r.length) hist.push({r:"bot",html:`Cela répond à votre question ? Sinon, <button type="button" class="bl" data-ao="sig">signalez le problème</button>.`});
-  dessine();
+  else { r.forEach(g=>hist.push({r:"bot",html:`<h4>${g.t}</h4>${g.h}`})); hist.push({r:"bot",html:`Cela répond à votre question ? Sinon, <button type="button" class="bl" data-ao="sig">signalez le problème</button>.`}); }
+}
+let enCours=false;
+async function repond(q){
+  if(enCours) return;
+  hist.push({r:"me",html:esc(q)}); enCours=true;
+  const att={r:"bot",html:"<i>Tonton réfléchit…</i>"}; hist.push(att); dessine();
+  let ia=null;
+  try{
+    const msgs=hist.filter(m=>m!==att && m.t).slice(-5).map(m=>({role:m.r==="me"?"user":"assistant",content:m.t}));
+    msgs.push({role:"user",content:q});
+    const sb=T.sb; if(!sb||!sb.functions) throw new Error("hors-ligne");
+    const {data,error}=await sb.functions.invoke("aide-assistant",{body:{messages:msgs}});
+    if(error||!data||!data.reponse) throw new Error("indisponible");
+    ia=String(data.reponse);
+  }catch(err){ ia=null; }
+  hist.splice(hist.indexOf(att),1);
+  hist[hist.length-1].t=q;
+  if(ia){
+    hist.push({r:"bot",t:ia,html:esc(ia).replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/\n+/g,"<br>")});
+    hist.push({r:"bot",html:`Cela répond à votre question ? Sinon, <button type="button" class="bl" data-ao="sig">signalez le problème</button>.`});
+  } else locale(q);
+  enCours=false; dessine();
 }
 function clic(e){
   const a=e.target.closest("[data-ao],[data-aq]"); if(!a) return;
