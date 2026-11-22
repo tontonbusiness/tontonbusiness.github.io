@@ -59,6 +59,14 @@ figure.shot{margin:0}figure.shot figcaption{padding:14px 18px 16px;background:va
 .df input:focus,.df textarea:focus{outline:3px solid #7FB3FF;outline-offset:1px}
 .df .full{grid-column:1/-1}.df .muted{color:var(--mut);font-size:13px;text-align:center}
 @media (max-width:640px){.df{grid-template-columns:1fr}}
+/* Confirmation displayed only after Formspree confirms successful submission */
+.demo-confirmation{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:17px;min-height:360px;padding:20px 4px;text-align:center}
+.demo-confirmation[hidden]{display:none}
+.demo-confirmation .confirmation-icon{width:78px;height:78px;border:3px solid var(--g2);border-radius:50%;display:grid;place-items:center;color:var(--g1);font-size:46px;font-weight:800;line-height:1}
+.demo-confirmation h2{font-size:clamp(28px,4vw,40px);margin:0}
+.demo-confirmation .confirmation-lead{font-size:clamp(18px,2.5vw,24px);font-weight:700;color:var(--g1);max-width:26ch}
+.demo-confirmation .confirmation-detail{font-size:17px;color:var(--fg);max-width:42ch}
+
 footer{padding-block:32px;border-top:1px solid var(--line);color:var(--mut);font-size:14px}
 .fl{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;align-items:center}
 @media (max-width:860px){.hgrid,.two{grid-template-columns:1fr}.hero{padding-block:40px 28px}section{padding-block:44px}}
@@ -120,27 +128,75 @@ footer{padding-block:32px;border-top:1px solid var(--line);color:var(--mut);font
 
 <section class="price" id="demo"><div class="wrap">
   <div class="box">
+    <div id="demo-introduction">
     <h2>Une démo <span class="gold">à votre rythme</span></h2>
     <p class="sub" style="margin:0 auto 22px">Mobilog est utilisé au quotidien par une société de transport pilote. Dites-nous comment vous travaillez : nous vous présentons le logiciel sur un exemple proche de votre activité et vous indiquons les conditions.</p>
-    <form id="df" class="df" novalidate>
+    </div>
+    <form id="df" class="df" novalidate action="https://formspree.io/f/maeolwjl" method="POST">
       <label>Votre société<input name="soc" autocomplete="organization" required></label>
       <label>Votre nom<input name="nom" autocomplete="name" required></label>
       <label>Téléphone<input name="tel" type="tel" autocomplete="tel" required></label>
       <label>Nombre de véhicules<input name="veh" inputmode="numeric" placeholder="ex. 12"></label>
       <label class="full">Un mot sur votre activité (facultatif)<textarea name="msg" rows="3"></textarea></label>
       <button class="btn full" type="submit">Envoyer ma demande de démo</button>
-      <p class="muted full" id="dmsg" role="status">Votre messagerie s'ouvrira avec votre demande déjà rédigée : il vous reste à l'envoyer. Vous pouvez aussi écrire directement à <a href="mailto:contact@tontonbusiness.com">contact@tontonbusiness.com</a>.</p>
+      <p class="muted full" id="dmsg" role="status" aria-live="polite">Votre demande sera envoyée directement, sans ouvrir votre messagerie.</p>
     </form>
+    <div id="demo-confirmation" class="demo-confirmation" role="status" aria-live="polite" tabindex="-1" hidden>
+      <div class="confirmation-icon" aria-hidden="true">✓</div>
+      <h2>Merci pour votre demande !</h2>
+      <p class="confirmation-lead">Votre demande de démonstration MOBILOG a bien été envoyée.</p>
+      <p class="confirmation-detail">Notre équipe vous contactera prochainement pour organiser votre démonstration.</p>
+    </div>
   </div>
 </div></section>
 </main>
 
 <footer><div class="wrap fl"><span>© Tonton Business · Mobilog</span><span><a href="../">Kit Rentabilité Tournées</a> · <a href="../mentions-legales.html">Mentions légales</a> · <a href="mailto:contact@tontonbusiness.com">contact@tontonbusiness.com</a></span></div></footer>
 <script>
-document.getElementById("df").addEventListener("submit",function(e){e.preventDefault();var f=e.target,v=function(n){return (f.elements[n].value||"").trim()};
- var m=document.getElementById("dmsg"); if(!v("soc")||!v("nom")||!v("tel")){m.textContent="Merci de renseigner votre société, votre nom et votre téléphone.";m.style.color="#F2CB62";return;}
- var body="Bonjour,\n\nJe souhaite une démo de Mobilog.\n\nSociété : "+v("soc")+"\nNom : "+v("nom")+"\nTéléphone : "+v("tel")+"\nNombre de véhicules : "+(v("veh")||"non précisé")+"\n\n"+(v("msg")||"")+"\n";
- window.location.href="mailto:contact@tontonbusiness.com?subject="+encodeURIComponent("Demande de démo Mobilog - "+v("soc"))+"&body="+encodeURIComponent(body);
- m.style.color="";m.textContent="Votre messagerie devrait s'ouvrir avec votre demande. Sinon, écrivez-nous à contact@tontonbusiness.com.";});
+document.getElementById("df").addEventListener("submit", async function(e) {
+  e.preventDefault();
+  const f = e.currentTarget;
+  const v = n => (f.elements[n].value || "").trim();
+  const m = document.getElementById("dmsg");
+  const button = f.querySelector('button[type="submit"]');
+  if (!v("soc") || !v("nom") || !v("tel")) {
+    m.textContent = "Merci de renseigner votre société, votre nom et votre téléphone.";
+    m.style.color = "#F2CB62";
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Envoi en cours…";
+  m.textContent = "Envoi de votre demande…";
+  m.style.color = "";
+  const payload = new FormData();
+  payload.append("Société", v("soc"));
+  payload.append("Nom", v("nom"));
+  payload.append("Téléphone", v("tel"));
+  payload.append("Nombre de véhicules", v("veh") || "Non précisé");
+  payload.append("Activité", v("msg") || "Non précisée");
+  payload.append("_subject", "Demande de démo MOBILOG - " + v("soc"));
+  try {
+    const response = await fetch(f.action, {
+      method: "POST",
+      body: payload,
+      headers: { "Accept": "application/json" }
+    });
+    if (!response.ok) throw new Error("Envoi refusé (" + response.status + ")");
+    f.reset();
+    f.hidden = true;
+    f.style.display = "none";
+    document.getElementById("demo-introduction").hidden = true;
+    const confirmation = document.getElementById("demo-confirmation");
+    confirmation.hidden = false;
+    confirmation.focus({preventScroll: true});
+    confirmation.scrollIntoView({behavior: "smooth", block: "center"});
+  } catch (err) {
+    m.textContent = "La demande n'a pas pu être envoyée. Veuillez réessayer ou écrire à contact@tontonbusiness.com.";
+    m.style.color = "#F2CB62";
+  } finally {
+    button.disabled = false;
+    button.textContent = "Envoyer ma demande de démo";
+  }
+});
 </script>
 </body></html>
