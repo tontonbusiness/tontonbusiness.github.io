@@ -73,7 +73,22 @@ function friseHtml(c){ if(!DRV_ST.includes(c.statut)) return "";
 function inDay(c,d){ const a=c.enlDate, b=(c.livDate&&c.livDate>=c.enlDate)?c.livDate:c.enlDate; if(!a) return false;
   if(a<=d && d<=b) return true;
   return d===todayIso() && b<d && a>=addDays(d,-7) && (c.statut==="envoyee"||c.statut==="en_cours"); }
-function myDay(condId,d){ return S.courses.filter(c=>c.conducteurId===condId && DRV_ST.includes(c.statut) && inDay(c,d))
+/* plusieurs conducteurs sur une même course : « surcouche » = la course vue par UN conducteur (ses propres étapes, son rôle) */
+const ROLES = { complet:"Course complète", enlevement:"Enlèvement seulement", livraison:"Livraison seulement" };
+const affsOf = id => (S.affs||[]).filter(a=>a.courseId===id);
+function affOverlay(c,a){ return Object.assign({},c,{conducteurId:a.conducteurId,camionId:a.camionId,remorqueId:a.remorqueId,arriveeEnl:a.arriveeEnl,chargeEnl:a.chargeEnl,arriveeLiv:a.arriveeLiv,livre:a.livre,reserve:a.reserve,vuLe:a.vuLe,_aff:a.id,_role:a.role,_part:Number(a.part)}); }
+function drvOverlay(c,cid){
+  const a=affsOf(c.id).find(x=>x.conducteurId===cid); let o=c, role=c.rolePrincipal||"complet";
+  if(a){ o=affOverlay(c,a); role=a.role; } else if(c.conducteurId!==cid) return null;
+  else o=Object.assign({},c,{_role:role,_part:Number(c.partPrincipal??100)});
+  if(DRV_ST.includes(c.statut) && (a || role!=="complet" || affsOf(c.id).length)){
+    const fait = role==="enlevement" ? o.chargeEnl : o.livre, debute = o.arriveeEnl||o.chargeEnl||o.arriveeLiv;
+    o.statut = fait ? "terminee" : debute ? "en_cours" : "envoyee"; }
+  return o; }
+const meDrv = () => isStaff() ? S.me : S.mem.conducteur_id;
+const drvC = id => { const c=S.courses.find(x=>x.id===id); return c ? (drvOverlay(c,meDrv())||c) : null; };
+const affArg = id => { if(!isStaff()) return {}; const a=affsOf(id).find(x=>x.conducteurId===S.me); return a ? {p_aff:a.id} : {}; };
+function myDay(condId,d){ return S.courses.map(c=>drvOverlay(c,condId)).filter(c=>c && DRV_ST.includes(c.statut) && inDay(c,d))
   .sort((x,y)=>(x.enlDate||"").localeCompare(y.enlDate||"") || (toMin(x.enlHeure)||0)-(toMin(y.enlHeure)||0)); }
 const gmaps=(a,cp,v)=>`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([a,cp,v].filter(Boolean).join(" "))}`;
 const isStaff = () => S.mem && (S.mem.role==="admin" || S.mem.role==="exploitant");
@@ -117,6 +132,7 @@ async function loadData(){
   const r = await Promise.all(q);
   const bad = r.find(x=>x.error); if(bad){ toast(errMsg(bad.error)); }
   S.courses=(r[0].data||[]).map(fromDb); S.conducteurs=(r[1].data||[]).map(fromDb); S.camions=(r[2].data||[]).map(fromDb); S.remorques=(r[3].data||[]).map(fromDb);
+  { const ra=await sb.from("course_affectations").select("*").eq("entreprise_id",eid); S.affs = ra.error ? [] : (ra.data||[]).map(fromDb); }
   S.membres = r[4] ? (r[4].data||[]) : [];
   S.acces = r[5] ? (r[5].data||[]).filter(a=>new Date(a.expire_le)>new Date()) : [];
   if(isStaff()){ const n=S.courses.reduce((t,c)=>t+incNew(c).length,0);
@@ -151,7 +167,7 @@ function ecrireVues(k,ids){ vuesMem[k]=ids; store.set(k,JSON.stringify(ids)); }
 function signalerApp(n){ try{ document.title=(n?"("+n+") ":"")+APPNAME; if(n){ navigator.setAppBadge && navigator.setAppBadge(n).catch(()=>{}); } else { navigator.clearAppBadge && navigator.clearAppBadge().catch(()=>{}); } }catch(e){} }
 function detecterNouvelles(){
   const k="dc_vues_"+S.mem.conducteur_id;
-  const miennes=S.courses.filter(c=>c.conducteurId===S.mem.conducteur_id && DRV_ST.includes(c.statut));
+  const miennes=S.courses.map(c=>drvOverlay(c,S.mem.conducteur_id)).filter(c=>c && DRV_ST.includes(c.statut));
   const vues=lireVues(k);
   if(!vues){ ecrireVues(k,miennes.map(c=>c.id)); S.nouvelles=[]; return; } // première ouverture : rien à signaler
   const hier=addDays(todayIso(),-1);
@@ -164,7 +180,7 @@ function detecterNouvelles(){
 }
 const vuesEnvoyees = new Set();
 function signalerVues(ids){ // « vu par le chauffeur » : visible côté exploitation
-  if(!S.mem || S.mem.role!=="conducteur") return; ids=ids.filter(id=>{ const c=S.courses.find(x=>x.id===id); return c && !c.vuLe && !vuesEnvoyees.has(id); });
+  if(!S.mem || S.mem.role!=="conducteur") return; ids=ids.filter(id=>{ const c=drvC(id); return c && !c.vuLe && !vuesEnvoyees.has(id); });
   if(!ids.length) return; ids.forEach(id=>vuesEnvoyees.add(id)); sb.rpc("marquer_vues",{p_ids:ids}).then(r=>{ if(r&&r.error) ids.forEach(id=>vuesEnvoyees.delete(id)); },()=>{ ids.forEach(id=>vuesEnvoyees.delete(id)); }); }
 function marquerVues(){ if(!S.mem || S.mem.role!=="conducteur") return; signalerVues((S.nouvelles||[]).slice()); const k="dc_vues_"+S.mem.conducteur_id; const v=lireVues(k)||new Set(); (S.nouvelles||[]).forEach(id=>v.add(id)); ecrireVues(k,[...v]); S.nouvelles=[]; signalerApp(0); }
 let channel=null;
@@ -172,15 +188,15 @@ function subscribe(){
   if(channel) sb.removeChannel(channel);
   const f=`entreprise_id=eq.${EID()}`;
   channel = sb.channel("tp-"+EID());
-  ["courses","conducteurs","camions","remorques"].forEach(t=> channel.on("postgres_changes",{event:"*",schema:"public",table:t,filter:f},scheduleReload));
+  ["courses","conducteurs","camions","remorques","course_affectations"].forEach(t=> channel.on("postgres_changes",{event:"*",schema:"public",table:t,filter:f},scheduleReload));
   channel.subscribe();
   if(!subscribe.done){ subscribe.done=true; // filet de sécurité si le temps réel est coupé
     setInterval(()=>{ if(S.mem && document.visibilityState==="visible") loadData(); }, 60000);
     document.addEventListener("visibilitychange",()=>{ if(S.mem && document.visibilityState==="visible") loadData(); }); }
 }
 async function saveCourse(id,obj){ const row=toDb(obj);
-  const res = id ? await sb.from("courses").update(row).eq("id",id) : await sb.from("courses").insert(Object.assign(row,{entreprise_id:EID()}));
-  if(res.error){ toast(errMsg(res.error)); return false; } scheduleReload(); return true; }
+  const res = id ? await sb.from("courses").update(row).eq("id",id) : await sb.from("courses").insert(Object.assign(row,{entreprise_id:EID()})).select("id");
+  if(res.error){ toast(errMsg(res.error)); return false; } saveCourse.lastId = id || (res.data&&res.data[0]&&res.data[0].id) || null; scheduleReload(); return true; }
 async function patchCourse(id,patch){ return saveCourse(id,patch); }
 async function tableWrite(table, op, id, obj){
   let res;
@@ -382,18 +398,19 @@ function vPlanning(){
   if(X.planAlerts) alerts.push(...X.planAlerts());
   S.courses.filter(c=>incNew(c).length).slice(0,8).forEach(c=>incNew(c).forEach(i=>alerts.push(`<div class="alert" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between"><span><b>Problème signalé${i.heure?" à "+esc(i.heure):""} :</b> ${esc(INC[i.type]||"Autre")} — ${esc(condById(c.conducteurId)?.nom||"Conducteur")} · ${esc(c.donneur||"")}${i.commentaire?" — "+esc(i.commentaire):""}</span><button type="button" class="btn btn-ghost btn-sm" data-open="${esc(c.id)}">Ouvrir la course</button></div>`)));
   const rowsHtml = rowsSrc.map(r=>{
-    const mine = r.st ? day.filter(c=>c.sousTraitantId===r.stId && c.statut!=="a_planifier") : day.filter(c=>!c.sousTraitantId && (S.mode==="conducteur"?c.conducteurId:c.camionId)===r.id && c.statut!=="a_planifier");
+    let mine = r.st ? day.filter(c=>c.sousTraitantId===r.stId && c.statut!=="a_planifier") : day.filter(c=>!c.sousTraitantId && (S.mode==="conducteur"?c.conducteurId:c.camionId)===r.id && c.statut!=="a_planifier");
+    if(!r.st) (S.affs||[]).filter(a=>(S.mode==="conducteur"?a.conducteurId:a.camionId)===r.id).forEach(a=>{ const c=day.find(x=>x.id===a.courseId); if(c && c.statut!=="a_planifier") mine.push(affOverlay(c,a)); });
     const L = lanes(mine);
     const off = !r.st && S.mode==="conducteur" && isRepos(r,S.date);
     const label = S.mode==="conducteur" ? r.nom : r.immat;
     const subl = r.st ? "Sous-traitant" : S.mode==="conducteur" ? (camName(r.camionId)? "Véhicule habituel : "+camName(r.camionId):"Pas de véhicule habituel") : (r.type||"");
     if(L.clash) alerts.push(`<div class="alert"><b>Chevauchement :</b> ${esc(label)} a des courses aux mêmes heures.</div>`);
     if(off && mine.length) alerts.push(`<div class="alert"><b>Repos :</b> ${esc(label)} est en repos mais a ${mine.length} course(s).</div>`);
-    const ca = mine.reduce((s,c)=>s+(Number(c.prix)||0),0);
+    const ca = mine.reduce((s,c)=>{ const part = c._aff ? c._part : (affsOf(c.id).length ? Number(c.partPrincipal??100) : 100); return s+(Number(c.prix)||0)*part/100; },0);
     const h = Math.max(62, L.n*44+12);
     const blocks = L.items.map(it=>{ const c=it.c; const other = S.mode==="conducteur" ? vehLabel(c) : [condName(c.conducteurId), c.remorqueId&&isTracteur(c.camionId)?remName(c.remorqueId):""].filter(Boolean).join(" · ");
-      return `<button type="button" class="blk st-${esc(etape(c))} ${it.clash?"clash":""}" data-open="${esc(c.id)}" data-drag="${esc(c.id)}" draggable="true" style="left:${pct(it.a)}%;width:calc(${Math.max(pct(it.b)-pct(it.a),4)}% - 3px);top:${6+it.l*44}px;height:40px" title="${esc(c.donneur)} · ${esc(etapeLib(c))}">
-        <b>${esc(c.donneur||"Sans client")}${c.statut==="envoyee"&&c.conducteurId&&("vuLe" in c)?(c.vuLe?" · vu":" · non vu"):""}</b><span>↑ ${esc(c.enlHeure||"--:--")} ${esc(c.enlVille||"")} → ↓ ${esc(c.livHeure||"")} ${esc(c.livVille||"")}${other?" · "+esc(other):""}</span></button>`; }).join("");
+      return `<button type="button" class="blk st-${esc(etape(c))} ${it.clash?"clash":""}" data-open="${esc(c.id)}" ${c._aff?"":`data-drag="${esc(c.id)}" draggable="true"`} style="left:${pct(it.a)}%;width:calc(${Math.max(pct(it.b)-pct(it.a),4)}% - 3px);top:${6+it.l*44}px;height:40px" title="${esc(c.donneur)} · ${esc(etapeLib(c))}">
+        <b>${esc(c.donneur||"Sans client")}${c._aff?` · ${esc(c._role==="enlevement"?"enlèvement":c._role==="livraison"?"livraison":"partagée")}`:(affsOf(c.id).length?" · +"+affsOf(c.id).length:"")}${c.statut==="envoyee"&&c.conducteurId&&("vuLe" in c)?(c.vuLe?" · vu":" · non vu"):""}</b><span>↑ ${esc(c.enlHeure||"--:--")} ${esc(c.enlVille||"")} → ↓ ${esc(c.livHeure||"")} ${esc(c.livVille||"")}${other?" · "+esc(other):""}</span></button>`; }).join("");
     const tog = S.mode==="conducteur" && !r.st ? `<button type="button" class="btn btn-ghost btn-sm" data-repos="${esc(r.id)}" style="align-self:flex-start;margin-top:4px">${off?"Remettre au travail":"Mettre en repos"}</button>` : "";
     return `<div class="row ${off?"off":""} ${L.clash?"warn":""}" data-drop="${esc(r.id)}">
       <div class="who"><b>${esc(label)}</b><span class="muted" style="font-size:12px">${esc(subl)}</span>${off?'<span style="font-size:12px;font-weight:700">Repos</span>':""}${tog}</div>
@@ -538,7 +555,7 @@ function vCourses(){
     <td>${esc(c.livNom||"")}<div class="muted">${esc(c.livCp||"")} ${esc(c.livVille||"")}</div></td>
     <td class="num">${esc(shortDate(c.livDate||c.enlDate))} ${esc(c.livHeure||"")}${c.livre?`<div class="muted">Réel : ${esc(c.livre)}</div>`:""}</td>
     <td>${esc(m||c.marchandise||"")}</td>
-    <td>${esc(condName(c.conducteurId)||"—")}<div class="muted">${esc(vehLabel(c))}</div></td>
+    <td>${esc(condName(c.conducteurId)||"—")}${affsOf(c.id).length?` <span class="chip" title="${esc(affsOf(c.id).map(a=>condName(a.conducteurId)).join(", "))}">+${affsOf(c.id).length}</span>`:""}<div class="muted">${esc(vehLabel(c))}</div></td>
     <td class="r num"><b>${c.prix?eur(c.prix):"—"}</b>${c.facturee?`<div class="muted">Facturée</div>`:""}</td>
     <td class="acts" data-act="noop"><button type="button" class="ib" data-open="${esc(c.id)}" title="Ouvrir la course" aria-label="Ouvrir la course">${IC_EYE}</button><details class="rowm"><summary class="ib" title="Autres actions" aria-label="Autres actions">⋯</summary><div class="rowm-pop"><button type="button" data-open="${esc(c.id)}">Ouvrir</button>${c.statut==="annulee"?"":`<button type="button" data-r="dup" data-id="${esc(c.id)}">Dupliquer…</button>`}</div></details></td></tr>`; }).join("");
   const actives=S.courses.filter(c=>c.statut!=="annulee");
@@ -598,6 +615,58 @@ const F = [
 function fieldHtml([k,l,t,,w],v){ const val=esc(v??"");
   if(t==="textarea") return `<label class="fld ${w?"wide":""}">${l}<textarea id="f_${k}">${val}</textarea></label>`;
   return `<label class="fld ${w?"wide":""}">${l}<input id="f_${k}" type="${t}" ${t==="number"?'step="any" inputmode="decimal"':""} value="${val}"></label>`; }
+/* ---------- plusieurs conducteurs / camions sur une même course ---------- */
+const affOk = () => !S.courses.length || ("rolePrincipal" in S.courses[0]);
+const roleOpts = v => Object.entries(ROLES).map(([k,l])=>`<option value="${k}" ${(v||"complet")===k?"selected":""}>${l}</option>`).join("");
+function affRow(a={}){
+  const co=`<option value="">— Conducteur —</option>`+activeConds().map(k=>`<option value="${esc(k.id)}" ${a.conducteurId===k.id?"selected":""}>${esc(k.nom)}</option>`).join("");
+  const ca=`<option value="">— Camion —</option>`+activeCams().map(k=>`<option value="${esc(k.id)}" ${a.camionId===k.id?"selected":""}>${esc(k.immat)}</option>`).join("");
+  const re=`<option value="">— Sans remorque —</option>`+activeRems().map(k=>`<option value="${esc(k.id)}" ${a.remorqueId===k.id?"selected":""}>${esc(k.immat)}</option>`).join("");
+  return `<div class="affrow" data-aff="${esc(a.id||"")}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;border:1px solid var(--line,#d9dde3);border-radius:10px;padding:10px">
+    <label class="fld" style="flex:2;min-width:150px">Conducteur<select class="affin" data-k="conducteurId">${co}</select></label>
+    <label class="fld" style="flex:2;min-width:130px">Camion<select class="affin" data-k="camionId">${ca}</select></label>
+    <label class="fld" style="flex:2;min-width:130px">Remorque<select class="affin" data-k="remorqueId">${re}</select></label>
+    <label class="fld" style="flex:2;min-width:160px">Rôle<select class="affin" data-k="role">${roleOpts(a.role)}</select></label>
+    <label class="fld" style="flex:1;min-width:80px">Part (%)<input class="affin affpart" data-k="part" type="number" step="any" inputmode="decimal" value="${esc(a.part??"")}"></label>
+    <button type="button" class="btn btn-ghost btn-sm" data-aff-act="del" aria-label="Retirer cette affectation">✕</button></div>`; }
+function affBlock(c){
+  if(!affOk()) return "";
+  const L=c.id?affsOf(c.id):[];
+  return `<div id="affBox" style="grid-column:1/-1;display:flex;flex-direction:column;gap:8px;margin-top:6px">
+    <label class="fld">Rôle du conducteur ci-dessus<select id="f_rolePrincipal">${roleOpts(c.rolePrincipal)}</select></label>
+    <label class="fld">Sa part du prix (%)<input id="f_partPrincipal" class="affpart" type="number" step="any" inputmode="decimal" value="${esc(c.partPrincipal??100)}"></label>
+    <b>Autres conducteurs et camions sur cette même course ?</b>
+    <span class="muted" style="font-size:13px">Un seul prix et une seule facture. Chacun valide ses propres étapes ; la part (%) sert uniquement à calculer la marge par camion.</span>
+    <div id="affRows" style="display:flex;flex-direction:column;gap:10px">${L.map(affRow).join("")}</div>
+    <button type="button" class="btn btn-ghost btn-sm" data-aff-act="add" style="align-self:flex-start">+ Ajouter un conducteur / un camion</button>
+    <span id="affTot" class="muted" style="font-size:13px"></span></div>`; }
+function affLire(){
+  return [...document.querySelectorAll("#affRows .affrow")].map(r=>{ const o={id:r.dataset.aff||null};
+    r.querySelectorAll(".affin").forEach(i=>{ const k=i.dataset.k; let v=i.value.trim(); if(k==="part") v=v===""?null:Number(v.replace(",",".")); o[k]=(v===""||(typeof v==="number"&&!isFinite(v)))?null:v; });
+    if(!o.role) o.role="complet"; return o; }); }
+function affTotal(){ const t=$("#affTot"); if(!t) return; const rows=affLire(); if(!rows.length){ t.textContent=""; return; }
+  const pp=$("#f_partPrincipal"); const tot=(Number((pp&&pp.value||"").replace(",","."))||0)+rows.reduce((a,x)=>a+(x.part||0),0);
+  t.textContent="Total des parts : "+(Math.round(tot*100)/100)+" %"+(Math.abs(tot-100)>0.01?" — il devrait faire 100 %":""); t.style.color=Math.abs(tot-100)>0.01?"var(--danger)":""; }
+function affEquilibrer(){ const rows=[...document.querySelectorAll("#affRows .affrow")]; const n=rows.length+1, part=Math.floor(100/n);
+  rows.forEach(r=>{ r.querySelector(".affpart").value=String(part); }); const pp=$("#f_partPrincipal"); if(pp) pp.value=String(100-part*rows.length); affTotal(); }
+document.addEventListener("click",e=>{ const b=e.target.closest("[data-aff-act]"); if(!b) return;
+  if(b.dataset.affAct==="add"){ $("#affRows").insertAdjacentHTML("beforeend",affRow({role:"complet"})); affEquilibrer(); const i=$("#affRows .affrow:last-child select"); i&&i.focus(); }
+  else if(b.dataset.affAct==="del"){ b.closest(".affrow").remove(); affEquilibrer(); } });
+document.addEventListener("input",e=>{ if(e.target.classList&&e.target.classList.contains("affpart")) affTotal(); });
+function affControle(o,L){
+  const ids=[o.conducteurId].filter(Boolean);
+  for(const a of L){ if(!a.conducteurId) return "Choisissez le conducteur de chaque affectation ajoutée (ou retirez la ligne).";
+    if(ids.includes(a.conducteurId)) return "Un même conducteur ne peut pas être affecté deux fois à la course."; ids.push(a.conducteurId); }
+  if(L.length && !o.conducteurId) return "Choisissez d'abord le conducteur principal.";
+  const tot=(o.partPrincipal??100)+L.reduce((t,a)=>t+(a.part||0),0); if(L.length && Math.abs(tot-100)>0.01) return "Le total des parts doit faire 100 % (actuellement "+(Math.round(tot*100)/100)+" %).";
+  return null; }
+async function affSync(courseId,L){
+  const avant=affsOf(courseId); let ok=true;
+  for(const a of avant) if(!L.some(x=>x.id===a.id)) ok = (await tableWrite("course_affectations","delete",a.id)) && ok;
+  for(const x of L){ const o={courseId,conducteurId:x.conducteurId,camionId:x.camionId||null,remorqueId:(x.camionId&&isTracteur(x.camionId))?(x.remorqueId||null):null,role:x.role,part:x.part??0};
+    if(x.id){ const old=avant.find(a=>a.id===x.id); const same=old&&["conducteurId","camionId","remorqueId","role"].every(k=>(old[k]||null)===(o[k]||null))&&Number(old.part)===Number(o.part); if(!same) ok=(await tableWrite("course_affectations","update",x.id,o))&&ok; }
+    else ok=(await tableWrite("course_affectations","insert",null,o))&&ok; }
+  return ok; }
 function courseForm(c,opts={}){
   const grp=g=>F.filter(f=>f[3]===g).map(f=>fieldHtml(f,c[f[0]])).join("");
   const condOpts=`<option value="">— Non affecté —</option>`+activeConds().map(k=>`<option value="${esc(k.id)}" ${c.conducteurId===k.id?"selected":""}>${esc(k.nom)}</option>`).join("");
@@ -621,6 +690,7 @@ function courseForm(c,opts={}){
     ${X.stSelect?X.stSelect(c):""}
     <label class="fld">Camion / tracteur<select id="f_camionId">${camOpts}</select></label>
     <label class="fld" id="remWrap" ${isTracteur(c.camionId)?"":"hidden"}>Remorque<select id="f_remorqueId">${remOpts}</select></label>
+    ${affBlock(c)}
     <label class="fld">Statut<select id="f_statut">${stOpts}</select></label>
     <label class="fld" style="flex-direction:row;align-items:center;gap:8px;margin-top:18px"><input type="checkbox" id="f_facturee" ${c.facturee?"checked":""} style="width:20px;height:20px">Facturée</label></fieldset>
   <fieldset><legend>Suivi réel (rempli par le conducteur)</legend>
@@ -672,6 +742,7 @@ function readForm(base){
   F.forEach(([k,,t])=>{ const el=$("#f_"+k); if(!el) return; let v=el.value.trim(); if(t==="number") v = v===""?null:Number(v.replace(",",".")); o[k]=v===""?null:v; });
   ["conducteurId","camionId","remorqueId","statut","arriveeEnl","chargeEnl","arriveeLiv","livre","reserve"].forEach(k=>{ const el=$("#f_"+k); if(el) o[k]=el.value.trim()||null; });
   const fc=$("#f_facturee"); if(fc) o.facturee=fc.checked;
+  const rp=$("#f_rolePrincipal"); if(rp){ o.rolePrincipal=rp.value||"complet"; const pp=$("#f_partPrincipal"); const pv=pp?pp.value.trim().replace(",","."):""; o.partPrincipal=pv===""?100:Number(pv); if(!isFinite(o.partPrincipal)) o.partPrincipal=100; }
   if($("#cmdRows")){ const cl=cmdLire(); if(cl.length || (Array.isArray(base.commandes)&&base.commandes.length)) o.commandes=cl; }
   const stEl=$("#f_sousTraitantId");
   if(stEl){ const nv=stEl.value||null, av=base.sousTraitantId||null; o.sousTraitantId=nv;
@@ -694,16 +765,18 @@ function openCourse(id){
   const c=S.courses.find(x=>x.id===id); if(!c) return; openId=id;
   openModal(courseForm(c,{title:esc(c.donneur||"Course")+(c.ref?` <span class="muted" style="font-size:14px;font-family:var(--text)">Réf. ${esc(c.ref)}</span>`:""),canDelete:true}));
   $("#cForm").addEventListener("submit",async e=>{ e.preventDefault(); const o=readForm(c);
+    const affL=$("#affRows")?affLire():null; if(affL){ const er=affControle(o,affL); if(er){ toast(er); return; } }
     if(!avecEnvoi(e,o)) return; const envoi=o.statut==="envoyee" && c.statut!=="envoyee";
-    if(await saveCourse(c.id,o)){ closeModal(); if(envoi) annonceEnvoi([Object.assign({},c,o)]); else toast("Course enregistrée"); } });
+    if(await saveCourse(c.id,o)){ if(affL) await affSync(c.id,affL); closeModal(); if(envoi) annonceEnvoi([Object.assign({},c,o)]); else toast("Course enregistrée"); } });
 }
 function newCourse(prefill){
   const c=Object.assign({enlDate:S.date,statut:"a_planifier"},prefill||{});
   openModal(courseForm(c,{title:"Nouvelle course"}));
   $("#cForm").addEventListener("submit",async e=>{ e.preventDefault(); const o=readForm(c);
     if(!o.donneur||!o.enlDate){ toast("Indiquez au moins le donneur d'ordre et la date d'enlèvement."); return; }
+    const affL=$("#affRows")?affLire():null; if(affL){ const er=affControle(o,affL); if(er){ toast(er); return; } }
     o.source="manuel"; if(!avecEnvoi(e,o)) return;
-    if(await saveCourse(null,o)){ closeModal(); if(o.statut==="envoyee") annonceEnvoi([Object.assign({},c,o)]); else toast(o.conducteurId?"Course créée, pas encore envoyée au conducteur":"Course créée"); } });
+    if(await saveCourse(null,o)){ if(affL&&affL.length&&saveCourse.lastId) await affSync(saveCourse.lastId,affL); closeModal(); if(o.statut==="envoyee") annonceEnvoi([Object.assign({},c,o)]); else toast(o.conducteurId?"Course créée, pas encore envoyée au conducteur":"Course créée"); } });
 }
 async function openDoc(path){
   const {data,error}=await sb.storage.from("documents").createSignedUrl(path,600);
@@ -793,12 +866,12 @@ function vDriver(){
   const tip = staff ? "" : installTip();
   if(!me) return `<div class="drv"><div class="drv-head"><h1>Vue conducteur</h1>${staff?`<p style="margin:0;color:var(--side-muted)">Choisissez un conducteur pour voir son écran.</p>${sel}`:`<p style="margin:0">Votre fiche conducteur est introuvable. Contactez votre exploitation.</p>`}</div>${back}</div>`;
   const vis=myDay(me.id,day);
-  const hidden=S.courses.filter(c=>c.conducteurId===me.id && c.enlDate===day && (c.statut==="planifiee"||c.statut==="a_planifier")).length;
+  const hidden=S.courses.filter(c=>(c.conducteurId===me.id||affsOf(c.id).some(a=>a.conducteurId===me.id)) && c.enlDate===day && (c.statut==="planifiee"||c.statut==="a_planifier")).length;
   const curId=(vis.find(c=>c.statut==="en_cours")||vis.find(c=>c.statut==="envoyee")||{}).id;
   const nDone=vis.filter(c=>c.statut==="terminee").length, allDone=vis.length>0 && nDone===vis.length;
   const jobs=vis.map((c,i)=> c.statut==="terminee" && !S.openJobs.has(c.id) ? jobLine(c,i+1) : jobHtml(c,i+1,c.id===curId)).join("");
   const veh = camName(me.camionId) ? camName(me.camionId)+(isTracteur(me.camionId)&&remName(camById(me.camionId)?.remorqueId)?" + "+remName(camById(me.camionId).remorqueId):"") : "";
-  const nvL = staff ? [] : (S.nouvelles||[]).map(id=>S.courses.find(c=>c.id===id)).filter(Boolean).sort((a,b)=>(a.enlDate||"").localeCompare(b.enlDate||"")||(toMin(a.enlHeure)||0)-(toMin(b.enlHeure)||0));
+  const nvL = staff ? [] : (S.nouvelles||[]).map(id=>drvC(id)).filter(Boolean).sort((a,b)=>(a.enlDate||"").localeCompare(b.enlDate||"")||(toMin(a.enlHeure)||0)-(toMin(b.enlHeure)||0));
   const nvVisible = nvL.find(c=>inDay(c,todayIso())||inDay(c,addDays(todayIso(),1)));
   const nvHtml = nvL.length ? `<div role="status" style="background:var(--accent-soft);border:2px solid var(--accent);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px">
       <b style="font-size:17px">${nvL.length>1?nvL.length+" nouvelles courses reçues":"Nouvelle course reçue"}</b>
@@ -820,7 +893,7 @@ function vDriver(){
 /* course terminée repliée sur une ligne */
 function jobLine(c,n){
   const chips=(c.reserve?`<span class="chip" style="border-color:var(--danger);color:var(--danger)">Réserve</span>`:"")+(hasBL(c)?"":`<span class="chip" style="border-color:var(--accent);color:var(--accent-ink)">BL à envoyer</span>`);
-  return `<button type="button" class="jobline" id="job-${esc(c.id)}" data-drv="toggle" data-id="${esc(c.id)}" aria-expanded="false"><span class="dot ok" aria-hidden="true">✓</span><span class="jl-main"><b>${n} · ${esc(c.donneur||"Course")}</b><span class="muted">${esc(c.livVille||"")}${c.livre?" · livré "+esc(c.livre):""}</span>${chips?`<span class="subs">${chips}</span>`:""}</span><span class="jl-chev" aria-hidden="true">Voir</span></button>`;
+  return `<button type="button" class="jobline" id="job-${esc(c.id)}" data-drv="toggle" data-id="${esc(c.id)}" aria-expanded="false"><span class="dot ok" aria-hidden="true">✓</span><span class="jl-main"><b>${n} · ${esc(c.donneur||"Course")}</b><span class="muted">${esc(c.livVille||"")}${c._role==="enlevement"?(c.chargeEnl?" · chargé "+esc(c.chargeEnl):""):(c.livre?" · livré "+esc(c.livre):"")}</span>${chips?`<span class="subs">${chips}</span>`:""}</span><span class="jl-chev" aria-hidden="true">Voir</span></button>`;
 }
 /* récapitulatif quand toutes les courses du jour sont livrées */
 function dayRecapHtml(condId){
@@ -835,7 +908,7 @@ function dayRecapHtml(condId){
 }
 /* écran affiché juste après « Livré » : BL, puis prochaine course ou fin de journée */
 function showDone(id){
-  const c=S.courses.find(x=>x.id===id); if(!c) return;
+  const c=drvC(id); if(!c) return;
   const L=myDay(c.conducteurId,todayIso());
   const next=L.find(x=>x.statut==="en_cours")||L.find(x=>x.statut==="envoyee");
   const blBlock = hasBL(c) ? `<div class="okline">✓ Photo du BL / CMR envoyée</div>`
@@ -852,7 +925,7 @@ function showDone(id){
 }
 /* signature du destinataire avec le doigt */
 function openSign(id,reserve){
-  const c=S.courses.find(x=>x.id===id); if(!c) return;
+  const c=drvC(id); if(!c) return;
   openModal(`<div data-lock="keep" class="drvmodal"><h2>Signature du destinataire</h2>
     <span class="muted">${esc(c.livNom||c.donneur||"")} — passe le téléphone à la personne qui réceptionne la marchandise.</span>
     ${reserve?`<div class="alert"><b>Réserve notée :</b> ${esc(reserve)}</div>`:""}
@@ -878,7 +951,7 @@ function openSign(id,reserve){
 }
 /* signalement d'un problème à l'exploitation */
 function openIncident(id){
-  const c=S.courses.find(x=>x.id===id); if(!c) return; S.incType=null;
+  const c=drvC(id); if(!c) return; S.incType=null;
   openModal(`<div data-lock="1" class="drvmodal"><h2>Signaler un problème</h2>
     <span class="muted">${esc(c.donneur||"Course")} — l'exploitation est prévenue tout de suite.</span>
     <div class="inctypes" role="radiogroup" aria-label="Type de problème">${Object.entries(INC).map(([k,l])=>`<button type="button" role="radio" aria-checked="false" class="btn btn-ghost" data-inctype="${k}">${l}</button>`).join("")}</div>
@@ -906,7 +979,7 @@ async function envoyerPhotosReserve(id){ const L=(S.resPh||[]).slice(); if(!L.le
   if(ko) toast(ko===L.length ? "La livraison est validée, mais les photos n'ont pas pu être envoyées. Préviens l'exploitation." : "La livraison est validée, mais "+ko+" photo"+(ko>1?"s":"")+" n'a pas pu être envoyée"+(ko>1?"s":"")+".");
 }
 async function deliver(id,reserve){
-  const {error}=await sb.rpc("etape_course",{p_course:id,p_etape:"livre",p_reserve:reserve||null});
+  const {error}=await sb.rpc("etape_course",Object.assign({p_course:id,p_etape:"livre",p_reserve:reserve||null},affArg(id)));
   if(error){ toast(errMsg(error)); return false; }
   S.reserveFor=null; resPhClear(); await loadData(); showDone(id); return true;
 }
@@ -914,7 +987,8 @@ function jobHtml(c,n,cur){
   const st=c.statut; const done=st==="terminee"||st==="annulee"; const id=esc(c.id);
   const maps=gmaps;
   // prochaine étape à valider : chaque bouton est placé directement sous l'enlèvement ou la livraison concernés
-  const next = done ? null : !c.arriveeEnl ? "arrivee_enl" : !c.chargeEnl ? "charge_enl" : !c.arriveeLiv ? "arrivee_liv" : "livre";
+  const role=c._role||"complet", roleLiv=role==="livraison", roleEnl=role==="enlevement";
+  const next = done ? null : roleLiv ? (!c.arriveeLiv?"arrivee_liv":"livre") : !c.arriveeEnl ? "arrivee_enl" : !c.chargeEnl ? "charge_enl" : roleEnl ? null : !c.arriveeLiv ? "arrivee_liv" : "livre";
   const enlCur = next==="arrivee_enl"||next==="charge_enl", livCur = next==="arrivee_liv"||next==="livre";
   let enlBtn="", livBtn="";
   if(next==="arrivee_enl") enlBtn=`<button type="button" class="btn btn-navy big" data-drv="arrivee_enl" data-id="${id}">Je suis arrivé à l'enlèvement</button>`;
@@ -940,8 +1014,9 @@ function jobHtml(c,n,cur){
   const incs = incOf(c).map(i=>`<div class="alert"><b>Signalé${i.heure?" à "+esc(i.heure):""} · ${esc(INC[i.type]||"Autre")}</b>${i.commentaire?" — "+esc(i.commentaire):""}</div>`).join("");
   return `<article class="job ${cur?"cur":""}" id="job-${id}">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:16px">${n} · ${esc(c.donneur||"")}${(S.nouvelles||[]).includes(c.id)?` <span class="chip" style="border-color:var(--accent);background:var(--accent);color:var(--on-accent);vertical-align:middle">Nouveau</span>`:""}</b><span style="display:flex;align-items:center;gap:8px">${st==="terminee"?`<button type="button" class="linkbtn" data-drv="toggle" data-id="${id}" aria-expanded="true">Replier</button>`:""}<span class="chip st-${esc(st)}">${esc(STATUTS[st]?.l||"")}</span></span></div>
-    ${step(!!c.chargeEnl,enlCur,"enl","Enlèvement"+jour(c.enlDate),c.enlHeure,`<div>${esc(c.enlNom||"")}</div><div>${esc(c.enlAdresse||"")} ${esc(c.enlCp||"")} ${esc(c.enlVille||"")}</div><a href="${maps(c.enlAdresse,c.enlCp,c.enlVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,sub("Arrivé",c.arriveeEnl)+sub("Chargé",c.chargeEnl),enlBtn)}
-    ${step(!!c.livre,livCur,"liv","Livraison"+jour(c.livDate),c.livHeure,`<div>${esc(c.livNom||"")}</div><div>${esc(c.livAdresse||"")} ${esc(c.livCp||"")} ${esc(c.livVille||"")}</div><a href="${maps(c.livAdresse,c.livCp,c.livVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,sub("Arrivé",c.arriveeLiv)+sub("Livré",c.livre)+(c.signataire?`<span class="sub ok">✓ Signé par ${esc(c.signataire)}</span>`:""),livBtn)}
+    ${step(!!c.chargeEnl||roleLiv,enlCur,"enl","Enlèvement"+jour(c.enlDate),c.enlHeure,`<div>${esc(c.enlNom||"")}</div><div>${esc(c.enlAdresse||"")} ${esc(c.enlCp||"")} ${esc(c.enlVille||"")}</div><a href="${maps(c.enlAdresse,c.enlCp,c.enlVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,roleLiv?`<span class="sub">Enlèvement assuré par un autre conducteur</span>`:sub("Arrivé",c.arriveeEnl)+sub("Chargé",c.chargeEnl),enlBtn)}
+    ${step(!!c.livre||roleEnl,livCur,"liv","Livraison"+jour(c.livDate),c.livHeure,`<div>${esc(c.livNom||"")}</div><div>${esc(c.livAdresse||"")} ${esc(c.livCp||"")} ${esc(c.livVille||"")}</div><a href="${maps(c.livAdresse,c.livCp,c.livVille)}" target="_blank" rel="noopener">Ouvrir le GPS</a>`,roleEnl?`<span class="sub">Livraison assurée par un autre conducteur</span>`:sub("Arrivé",c.arriveeLiv)+sub("Livré",c.livre)+(c.signataire?`<span class="sub ok">✓ Signé par ${esc(c.signataire)}</span>`:""),livBtn)}
+    ${role!=="complet"?`<div class="alert" style="background:var(--accent-soft);color:inherit"><b>${esc(ROLES[role])}</b> — la course est partagée avec un autre conducteur.</div>`:""}
     ${vehLabel(c)?`<div style="font-size:13px"><b>Véhicule :</b> ${esc(vehLabel(c))}</div>`:""}
     ${m||c.ref?`<div class="muted" style="font-size:13px">${esc(m)}${c.ref?" · Réf. "+esc(c.ref):""}</div>`:""}
     ${cmdTexte(c).length>1?`<div style="font-size:13px"><b>Commandes :</b><ul style="margin:4px 0 0;padding-left:18px">${cmdTexte(c).map(t=>`<li>${esc(t)}</li>`).join("")}</ul></div>`:""}
@@ -950,14 +1025,14 @@ function jobHtml(c,n,cur){
     ${c.reserve?`<div class="alert"><b>Réserve :</b> ${esc(c.reserve)}</div>`:""}
     ${incs}
     <div class="${packOn()&&st!=="annulee"?"two":""}"><label class="btn btn-ghost" style="position:relative">Photo BL / CMR${bl?` (${bl})`:""}<input type="file" accept="image/*,application/pdf" class="hidden-file" data-bl="${id}"></label>${packOn()&&st!=="annulee"?`<button type="button" class="btn btn-ghost" data-drv="incident" data-id="${id}">Signaler un problème</button>`:""}</div>
-    ${c.arriveeEnl&&!done?`<button type="button" class="btn btn-ghost btn-sm" data-drv="annuler" data-id="${id}" style="align-self:center">Annuler la dernière étape</button>`:""}
+    ${(roleLiv?c.arriveeLiv:c.arriveeEnl)&&!done?`<button type="button" class="btn btn-ghost btn-sm" data-drv="annuler" data-id="${id}" style="align-self:center">Annuler la dernière étape</button>`:""}
   </article>`;
 }
 async function drvAction(act,id,el){
   if(act==="pasencore"){ toast("Valide d'abord l'enlèvement : arrivé, puis chargé."); return; }
   if(act==="pushon"){ pushActiver(); return; }
   if(act==="vunv"){ marquerVues(); render(); return; }
-  if(act==="voirnv"){ const c=S.courses.find(x=>x.id===id); marquerVues(); if(c) S.drvDay = inDay(c,todayIso()) ? "today" : "tomorrow"; render(); const j=document.getElementById("job-"+id); j&&j.scrollIntoView({block:"start"}); return; }
+  if(act==="voirnv"){ const c=drvC(id); marquerVues(); if(c) S.drvDay = inDay(c,todayIso()) ? "today" : "tomorrow"; render(); const j=document.getElementById("job-"+id); j&&j.scrollIntoView({block:"start"}); return; }
   if(act==="toggle"){ S.openJobs.has(id)?S.openJobs.delete(id):S.openJobs.add(id); render(); return; }
   if(act==="incident"){ openIncident(id); return; }
   if(act==="next"){ closeModal(); S.drvDay="today"; render(); const j=document.getElementById("job-"+id); j&&j.scrollIntoView({block:"start"}); return; }
@@ -1002,7 +1077,7 @@ async function drvAction(act,id,el){
     if(packOn()) openSign(id,reserve); else await deliver(id,reserve);
     return;
   }
-  const {error}=await sb.rpc("etape_course",{p_course:id,p_etape:act,p_reserve:null});
+  const {error}=await sb.rpc("etape_course",Object.assign({p_course:id,p_etape:act,p_reserve:null},affArg(id)));
   if(error){ toast(errMsg(error)); return; }
   scheduleReload();
 }
