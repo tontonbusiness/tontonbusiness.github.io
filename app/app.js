@@ -131,11 +131,12 @@ function errMsg(e){ const m=(e&&(e.message||e.error_description||e.msg))||"";
   if(/Invalid login credentials/i.test(m)) return "E-mail ou mot de passe incorrect.";
   if(/Email not confirmed/i.test(m)) return "Votre e-mail n'est pas encore confirmé : ouvrez le lien reçu par e-mail.";
   if(/already registered|already been registered/i.test(m)) return "Un compte existe déjà avec cet e-mail : connectez-vous.";
-  if(/Password should be/i.test(m)) return "Le mot de passe doit contenir au moins 8 caractères.";
+  if(/Password should|weak_password/i.test(m)) return "Le mot de passe doit contenir au moins 10 caractères, avec des lettres et des chiffres.";
   if(/rate limit|too many/i.test(m)) return "Trop d'essais d'un coup : réessayez dans quelques minutes.";
   if(/Failed to fetch|NetworkError|network/i.test(m)) return "Pas de connexion internet : réessayez.";
   if(/interdit|row-level security/i.test(m)) return "Action non autorisée pour votre compte.";
-  return "L'action a échoué. Réessayez." + (m ? " ("+m.slice(0,80)+")" : "");
+  if(m) console.warn("Mobilog :", m);
+  return "L'action a échoué. Réessayez. Si le problème continue, contactez contact@tontonbusiness.com.";
 }
 
 /* ---------- conversions base <-> application ---------- */
@@ -362,14 +363,14 @@ function vAuth(){
     <p class="muted" style="margin:0">${signup?"Pour l'exploitation (gérant, exploitant). Les conducteurs n'ont pas besoin de compte : ils reçoivent un lien d'accès.":"Espace exploitation. Conducteur ? Utilisez l'application Dream Chauffeur et le code reçu de votre exploitation."}</p>
     <form id="authForm" style="display:flex;flex-direction:column;gap:10px">
       <label class="fld">E-mail<input type="email" id="aEmail" autocomplete="email" required></label>
-      <label class="fld">Mot de passe<input type="password" id="aPass" autocomplete="${signup?"new-password":"current-password"}" minlength="8" required></label>
+      <label class="fld">Mot de passe<input type="password" id="aPass" autocomplete="${signup?"new-password":"current-password"}"${signup?' minlength="10"':""} required></label>
       ${S.authErr?`<p class="err" style="margin:0">${esc(S.authErr)}</p>`:""}
       <button class="btn btn-accent" type="submit">${signup?"Créer mon compte":"Se connecter"}</button></form>
     <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <button type="button" class="linkbtn" data-auth="${signup?"login":"signup"}">${signup?"J'ai déjà un compte":"Créer un compte entreprise"}</button>
       ${signup?"":`<button type="button" class="linkbtn" data-auth="forgot">Mot de passe oublié ?</button>`}</div>`);
 }
-function vRecovery(){ return authShell(`<h1>Nouveau mot de passe</h1><form id="recForm" style="display:flex;flex-direction:column;gap:10px"><label class="fld">Nouveau mot de passe (8 caractères minimum)<input type="password" id="rPass" minlength="8" autocomplete="new-password" required></label>${S.authErr?`<p class="err" style="margin:0">${esc(S.authErr)}</p>`:""}<button class="btn btn-accent" type="submit">Enregistrer</button></form>`); }
+function vRecovery(){ return authShell(`<h1>Nouveau mot de passe</h1><form id="recForm" style="display:flex;flex-direction:column;gap:10px"><label class="fld">Nouveau mot de passe (10 caractères minimum, lettres et chiffres)<input type="password" id="rPass" minlength="10" autocomplete="new-password" required></label>${S.authErr?`<p class="err" style="margin:0">${esc(S.authErr)}</p>`:""}<button class="btn btn-accent" type="submit">Enregistrer</button></form>`); }
 function vOnboard(){
   const anon = S.session?.user?.is_anonymous;
   if(anon) return authShell(`<h1>Accès conducteur</h1><p style="margin:0">Ce téléphone n'est rattaché à aucun conducteur. Demandez à votre exploitation un <b>nouveau lien d'accès</b>, ou saisissez le code reçu.</p>

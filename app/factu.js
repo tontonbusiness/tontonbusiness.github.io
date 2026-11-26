@@ -325,8 +325,8 @@ const kmBloc = c => { if(!kmActif() || c.statut==="annulee") return "";
 const CARTE = { lib:null, cache:new Map() };
 const carteBloc = c => (kmActif() && c.statut!=="annulee" && kmPret(c)) ? `<div id="mapBox" data-id="${esc(c.id)}" style="height:280px;border-radius:12px;border:1px solid var(--line);overflow:hidden;background:var(--surface-2);display:grid;place-items:center" role="img" aria-label="Carte du trajet entre l'enlèvement et la livraison"><span class="muted">Chargement de la carte…</span></div>` : "";
 function chargerLeaflet(){ if(window.L) return Promise.resolve(); if(CARTE.lib) return CARTE.lib;
-  CARTE.lib=new Promise((ok,ko)=>{ const l=document.createElement("link"); l.rel="stylesheet"; l.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; document.head.appendChild(l);
-    const sc=document.createElement("script"); sc.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"; sc.onload=()=>ok(); sc.onerror=()=>{ CARTE.lib=null; ko(new Error("leaflet")); }; document.head.appendChild(sc); });
+  CARTE.lib=new Promise((ok,ko)=>{ const l=document.createElement("link"); l.rel="stylesheet"; l.href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"; l.integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb"; l.crossOrigin="anonymous"; document.head.appendChild(l);
+    const sc=document.createElement("script"); sc.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"; sc.integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO"; sc.crossOrigin="anonymous"; sc.onload=()=>ok(); sc.onerror=()=>{ CARTE.lib=null; ko(new Error("leaflet")); }; document.head.appendChild(sc); });
   return CARTE.lib; }
 async function trajet(c){ const k=c.id+kmCle(c); if(CARTE.cache.has(k)) return CARTE.cache.get(k);
   const a=await geocoder(c.enlAdresse,c.enlCp,c.enlVille), b=await geocoder(c.livAdresse,c.livCp,c.livVille); if(!a||!b) return null;
