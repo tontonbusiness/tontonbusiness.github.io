@@ -98,7 +98,8 @@ const EID = () => S.mem && S.mem.entreprise_id;
 let tt; function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true,3600); }
 function toastAct(html,ms){ const t=$("#toast"); t.innerHTML=html; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true,ms||12000); }
 function errMsg(e){ const m=(e&&(e.message||e.error_description||e.msg))||"";
-  if(/code_invalide/.test(m)) return "Ce code n'est pas valable. Vérifie-le, ou demande un nouveau code à ton exploitation.";
+  if(/code_invalide/.test(m)) return "Ce code n'est pas valable ou a expiré (7 jours). Vérifie-le, ou demande un nouveau code à ton exploitation.";
+  if(/code_utilise/.test(m)) return "Ce code a déjà servi. Demande un nouveau code à ton exploitation.";
   if(/deja_exploitant/.test(m)) return "Ce navigateur est connecté avec un compte d'exploitation. Ouvrez Dream Chauffeur sur le téléphone du conducteur.";
   if(/deja_membre/.test(m)) return "Ce compte est déjà rattaché à une entreprise.";
   if(/Invalid login credentials/i.test(m)) return "E-mail ou mot de passe incorrect.";
@@ -128,13 +129,13 @@ async function loadData(){
     sb.from("remorques").select("*").eq("entreprise_id",eid)
   ];
   if(isStaff()){ q.push(sb.from("membres").select("user_id,role,conducteur_id,derniere_connexion,appareil").eq("entreprise_id",eid));
-    q.push(sb.from("acces_conducteurs").select("code,conducteur_id,expire_le").eq("entreprise_id",eid)); }
+    q.push(sb.from("acces_conducteurs").select("code,conducteur_id,expire_le,utilisations").eq("entreprise_id",eid)); }
   const r = await Promise.all(q);
   const bad = r.find(x=>x.error); if(bad){ toast(errMsg(bad.error)); }
   S.courses=(r[0].data||[]).map(fromDb); S.conducteurs=(r[1].data||[]).map(fromDb); S.camions=(r[2].data||[]).map(fromDb); S.remorques=(r[3].data||[]).map(fromDb);
   { const ra=await sb.from("course_affectations").select("*").eq("entreprise_id",eid); S.affs = ra.error ? [] : (ra.data||[]).map(fromDb); }
   S.membres = r[4] ? (r[4].data||[]) : [];
-  S.acces = r[5] ? (r[5].data||[]).filter(a=>new Date(a.expire_le)>new Date()) : [];
+  S.acces = r[5] ? (r[5].data||[]).filter(a=>new Date(a.expire_le)>new Date() && !(a.utilisations>=2)) : [];
   if(isStaff()){ const n=S.courses.reduce((t,c)=>t+incNew(c).length,0);
     if(S.incN!=null && n>S.incN){ const c=S.courses.filter(x=>incNew(x).length).sort((x,y)=>String(incNew(y).slice(-1)[0].le).localeCompare(String(incNew(x).slice(-1)[0].le)))[0];
       const i=c&&incNew(c).slice(-1)[0]; if(i) toast(`Problème signalé par ${condById(c.conducteurId)?.nom||"un conducteur"} : ${INC[i.type]||"Autre"}`); }
@@ -1218,7 +1219,7 @@ async function showAcces(condId, regen){
   if(regen || !code){
     const {data,error}=await sb.rpc("generer_acces",{p_conducteur:condId});
     if(error){ toast(errMsg(error)); return; }
-    code=data; S.acces=(S.acces||[]).filter(a=>a.conducteur_id!==condId).concat([{code,conducteur_id:condId,expire_le:new Date(Date.now()+365*864e5).toISOString()}]);
+    code=data; S.acces=(S.acces||[]).filter(a=>a.conducteur_id!==condId).concat([{code,conducteur_id:condId,expire_le:new Date(Date.now()+7*864e5).toISOString(),utilisations:0}]);
     if(S.view==="parametres") render();
   }
   const link=CHAUFFEUR_URL+"?code="+encodeURIComponent(code);
@@ -1226,14 +1227,14 @@ async function showAcces(condId, regen){
   const digits=(k.tel||"").replace(/\D/g,"");
   const intl = /^0\d{9}$/.test(digits) ? "33"+digits.slice(1) : (/^33\d{9}$/.test(digits) ? digits : "");
   const prenom=(k.nom||"").split(" ")[0];
-  const msg = `Bonjour ${prenom}, voici ton application Dream Chauffeur pour voir ton programme de courses : ${link}\n\nTon code d'invitation : ${shown}\n\nSur iPhone, ouvre le lien avec Safari puis Partager → « Sur l'écran d'accueil » pour avoir l'icône.`;
+  const msg = `Bonjour ${prenom}, voici ton application Dream Chauffeur pour voir ton programme de courses : ${link}\n\nTon code d'invitation : ${shown} (valable 7 jours)\n\nSur iPhone, ouvre le lien avec Safari puis Partager → « Sur l'écran d'accueil » pour avoir l'icône.`;
   const envoiBtns = intl
     ? `<div class="two"><a class="btn" style="background:#25D366;color:#0B2E17" href="https://wa.me/${intl}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">WhatsApp</a><a class="btn btn-navy" href="sms:+${intl}?&body=${encodeURIComponent(msg)}">SMS</a></div><p class="muted" style="margin:0;font-size:12px">Le message s'ouvre déjà rempli pour ${esc(k.tel)} : il ne reste qu'à appuyer sur Envoyer. Le SMS fonctionne surtout depuis un téléphone.</p>`
     : `<p class="muted" style="margin:0;font-size:13px">Ajoutez le numéro de téléphone du conducteur pour l'envoyer directement par WhatsApp ou SMS.</p>`;
   let qrSvg=""; try{ const q=window.qrcode(0,"M"); q.addData(link); q.make(); qrSvg=q.createSvgTag({cellSize:5,margin:2,scalable:true}); }catch(e){}
   openModal(`<h2>Envoyer Dream Chauffeur à ${esc(k.nom)}</h2>
     <div class="code">${esc(shown)}</div>
-    <p style="margin:0">Code d'invitation de ${esc(prenom)}. Il ouvre le lien (ou scanne le QR code) puis l'application s'ouvre directement sur son programme. S'il change de téléphone, il lui suffit de saisir à nouveau ce code.</p>
+    <p style="margin:0">Code d'invitation de ${esc(prenom)}. Il ouvre le lien (ou scanne le QR code) puis l'application s'ouvre directement sur son programme. Le code est valable 7 jours, pour un seul téléphone : s'il change de téléphone, générez-lui un nouveau code.</p>
     <b style="font-size:14px">Envoyer par…</b>
     ${envoiBtns}
     ${qrSvg?`<div class="qr" role="img" aria-label="QR code de l'application Dream Chauffeur">${qrSvg}</div>`:""}
