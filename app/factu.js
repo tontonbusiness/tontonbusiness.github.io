@@ -270,23 +270,29 @@ const adrNette = s => String(s||"")
 async function geocoder(adr,cp,ville){
   const cp5 = /^\d{5}$/.test(String(cp||"").trim()) ? String(cp).trim() : "";
   const dep = cp5 ? (/^9[78]/.test(cp5) ? cp5.slice(0,3) : cp5.slice(0,2)) : ""; // département attendu
-  // nom de commune comparable : sans accents ni articles, mots triés (« Courneuve (La) » = « La Courneuve », « Saint » = « St »)
-  const simple = s => String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()
-    .split(" ").filter(w=>w && !/\d/.test(w) && !["le","la","les","l","de","du","des","d","cedex","arrondissement","er","e","eme"].includes(w)).map(w=>/^(saint|ste?)$/.test(w)?"st":w).sort().join(" ");
-  const vS = simple(ville);
+  // nom de commune comparable : sans accents ni articles (« Courneuve (La) » = « La Courneuve », « Saint » = « St »)
+  const mots = s => String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()
+    .split(" ").filter(w=>w && !/\d/.test(w) && !["le","la","les","l","de","du","des","d","cedex","arrondissement","er","e","eme","cdg","aeroport","aerogare"].includes(w)).map(w=>/^(saint|ste?)$/.test(w)?"st":w);
+  const vM = mots(ville), vS = vM.slice().sort().join(" ");
+  // même commune : mêmes mots, ou le nom saisi est le début du nom officiel (« Roissy » = « Roissy-en-France », mais « Gonesse » ≠ « Garges-lès-Gonesse »)
+  const memeCommune = city => { const c=mots(city); if(!c.length || !vM.length) return true; if(c.slice().sort().join(" ")===vS) return true; return vM.length<=c.length && vM.every((w,i)=>c[i]===w); };
   const essai = async (q, avecCp, adresse) => { q=String(q||"").replace(/\s+/g," ").trim().slice(0,190); if(q.length<3) return null;
-    const u=new URL("https://data.geopf.fr/geocodage/search"); u.searchParams.set("q",q); u.searchParams.set("limit","1"); if(avecCp && cp5) u.searchParams.set("postcode",cp5);
-    const r=await fetch(u); if(!r.ok) throw new Error("geocodage "+r.status); const f=((await r.json()).features||[])[0];
-    if(!(f && f.properties && f.properties.score>=0.4)) return null;
-    const pc=String(f.properties.postcode||""); if(dep && pc && !pc.startsWith(dep)) return null; // résultat hors du département : refusé
-    const cS=simple(f.properties.city); if(adresse && vS.length>=3 && cS && cS!==vS) return null; // rue trouvée dans une autre commune : refusée
-    return f.geometry.coordinates; };
-  const adrQ = adrNette(adr) ? [adrNette(adr),ville].filter(Boolean).join(" ") : "";
-  const villeQ = ville && String(ville).trim().length>=3 ? ville : [cp,ville].filter(Boolean).join(" ");
+    const u=new URL("https://data.geopf.fr/geocodage/search"); u.searchParams.set("q",q); u.searchParams.set("limit","5"); if(avecCp && cp5) u.searchParams.set("postcode",cp5);
+    const r=await fetch(u); if(!r.ok) throw new Error("geocodage "+r.status);
+    for(const f of ((await r.json()).features||[])){
+      if(!(f && f.properties && f.properties.score>=0.4)) continue;
+      const pc=String(f.properties.postcode||""); if(dep && pc && !pc.startsWith(dep)) continue; // hors du département : refusé
+      if(adresse && vS.length>=3 && !memeCommune(f.properties.city)) continue; // trouvé dans une autre commune : refusé
+      return f.geometry.coordinates; }
+    return null; };
+  const adrQ = adrNette(adr) ? [adrNette(adr),String(ville||"").replace(/\bcedex\b\s*\d*/gi," ").replace(/\b(?:cdg|a[ée]roport|a[ée]rogare)\b/gi," ")].filter(Boolean).join(" ") : "";
+  // « Roissy CDG CEDEX » : la base d'adresses ne connaît ni CEDEX ni CDG
+  const villeN = String(ville||"").replace(/\bcedex\b\s*\d*/gi," ").replace(/\b(?:cdg|a[ée]roport|a[ée]rogare)\b/gi," ").replace(/\b\d+\s*(?:e|er|[èe]me)?\b/gi," ").replace(/\barrondissement\b/gi," ").replace(/\s+/g," ").trim();
+  const villeQ = villeN.length>=3 ? villeN : [cp,villeN].filter(Boolean).join(" ");
   // un code postal CEDEX / BP (ex. 95502) n'existe pas dans la base d'adresses : on réessaie sans lui
   let pt = adrQ ? await essai(adrQ,true,true) : null;
   if(!pt && adrQ && cp5) pt = await essai(adrQ,false,true);
-  if(!pt) pt = await essai(villeQ,true); // à défaut : le centre de la commune
+  if(!pt) pt = await essai(villeQ,true,!cp5); // à défaut : le centre de la commune (sans code postal valable : même commune exigée)
   if(!pt && cp5) pt = await essai(villeQ,false,true); // sans code postal : seulement si c'est bien la même commune
   return pt;
 }
