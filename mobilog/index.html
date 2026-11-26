@@ -138,6 +138,7 @@ footer{padding-block:32px;border-top:1px solid var(--line);color:var(--mut);font
       <label>Téléphone<input name="tel" type="tel" autocomplete="tel" required></label>
       <label>Nombre de véhicules<input name="veh" inputmode="numeric" placeholder="ex. 12"></label>
       <label class="full">Un mot sur votre activité (facultatif)<textarea name="msg" rows="3"></textarea></label>
+      <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
       <button class="btn full" type="submit">Envoyer ma demande de démo</button>
       <p class="muted full" id="dmsg" role="status" aria-live="polite">Votre demande sera envoyée directement, sans ouvrir votre messagerie.</p>
     </form>
@@ -175,6 +176,7 @@ document.getElementById("df").addEventListener("submit", async function(e) {
   payload.append("Nombre de véhicules", v("veh") || "Non précisé");
   payload.append("Activité", v("msg") || "Non précisée");
   payload.append("_subject", "Demande de démo MOBILOG - " + v("soc"));
+  payload.append("_gotcha", f.elements["_gotcha"].value || "");
   try {
     const response = await fetch(f.action, {
       method: "POST",

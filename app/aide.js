@@ -162,6 +162,7 @@ async function soumet(e){
   d.append("Message", m);
   d.append("Contact", c||"Non renseigné");
   d.append("Écran", window.innerWidth+"x"+window.innerHeight);
+  d.append("_gotcha","");
   d.append("_subject","Signalement Mobilog - "+((S.entreprise&&S.entreprise.nom)||"entreprise"));
   try{
     const r=await fetch(FORM_URL,{method:"POST",body:d,headers:{"Accept":"application/json"}});

@@ -5,6 +5,21 @@ const CFG = window.TP_CONFIG;
 const MODE = window.TP_MODE==="chauffeur" ? "chauffeur" : "exploitation"; // /chauffeur = application Dream Chauffeur
 const APPNAME = MODE==="chauffeur" ? "Dream Chauffeur" : "Mobilog";
 const CHAUFFEUR_URL = CFG.chauffeurUrl || "https://tontonbusiness.com/chauffeur/";
+// Anti-robot Cloudflare Turnstile : inactif tant que CFG.turnstileSiteKey n'est pas renseigné dans config.js
+// (la clé secrète correspondante se met dans Supabase → Authentication → Attack Protection).
+let tsWidget=null, tsAttente=null;
+function jetonCaptcha(){
+  const key=CFG.turnstileSiteKey; if(!key) return Promise.resolve(undefined);
+  const charger = window.turnstile ? Promise.resolve() : new Promise((ok,ko)=>{ const s=document.createElement("script");
+    s.src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"; s.async=true; s.onload=ok; s.onerror=()=>ko(new Error("captcha_indisponible")); document.head.appendChild(s); });
+  return charger.then(()=>new Promise((ok,ko)=>{
+    let box=document.getElementById("tsBox"); if(!box){ box=document.createElement("div"); box.id="tsBox"; box.style.cssText="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:9999"; document.body.appendChild(box); }
+    tsAttente={ok,ko};
+    const fini=t=>{ const a=tsAttente; tsAttente=null; if(a) a.ok(t); };
+    if(tsWidget===null) tsWidget=window.turnstile.render(box,{sitekey:key,language:"fr",appearance:"interaction-only",callback:fini,"error-callback":()=>{ const a=tsAttente; tsAttente=null; if(a) a.ko(new Error("captcha_echec")); }});
+    else window.turnstile.reset(tsWidget);
+  }));
+}
 const standalone = () => { try{ return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone===true; }catch(e){ return false; } };
 const appareil = () => { const u=navigator.userAgent||""; const d=/iPhone/.test(u)?"iPhone":/iPad/.test(u)?"iPad":/Android/.test(u)?"Android":"Ordinateur"; return d+(standalone()?" · application":" · navigateur"); };
 const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
@@ -99,6 +114,7 @@ let tt; function toast(msg){ const t=$("#toast"); t.textContent=msg; t.hidden=fa
 function toastAct(html,ms){ const t=$("#toast"); t.innerHTML=html; t.hidden=false; clearTimeout(tt); tt=setTimeout(()=>t.hidden=true,ms||12000); }
 function errMsg(e){ const m=(e&&(e.message||e.error_description||e.msg))||"";
   if(/code_invalide/.test(m)) return "Ce code n'est pas valable ou a expiré (7 jours). Vérifie-le, ou demande un nouveau code à ton exploitation.";
+  if(/captcha/i.test(m)) return "Vérification anti-robot impossible. Rechargez la page et réessayez.";
   if(/code_utilise/.test(m)) return "Ce code a déjà servi. Demande un nouveau code à ton exploitation.";
   if(/deja_exploitant/.test(m)) return "Ce navigateur est connecté avec un compte d'exploitation. Ouvrez Dream Chauffeur sur le téléphone du conducteur.";
   if(/deja_membre/.test(m)) return "Ce compte est déjà rattaché à une entreprise.";
@@ -353,11 +369,11 @@ document.addEventListener("submit", async e=>{
   const f=e.target;
   if(f.id==="authForm"){ e.preventDefault(); S.authErr=""; const email=$("#aEmail").value.trim(); const btn=f.querySelector("button[type=submit]"); btn.disabled=true;
     try{
-      if(S.authMode==="forgot"){ const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:CFG.appUrl}); if(error) throw error; toast("Lien envoyé : vérifiez vos e-mails."); S.authMode="login"; render(); return; }
+      if(S.authMode==="forgot"){ const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:CFG.appUrl,captchaToken:await jetonCaptcha()}); if(error) throw error; toast("Lien envoyé : vérifiez vos e-mails."); S.authMode="login"; render(); return; }
       const pass=$("#aPass").value;
-      if(S.authMode==="signup"){ const {data,error}=await sb.auth.signUp({email,password:pass,options:{emailRedirectTo:CFG.appUrl}}); if(error) throw error;
+      if(S.authMode==="signup"){ const {data,error}=await sb.auth.signUp({email,password:pass,options:{emailRedirectTo:CFG.appUrl,captchaToken:await jetonCaptcha()}}); if(error) throw error;
         if(!data.session){ S.authMode="login"; S.authErr=""; render(); toast("Compte créé : confirmez votre e-mail puis connectez-vous."); return; } }
-      else { const {error}=await sb.auth.signInWithPassword({email,password:pass}); if(error) throw error; }
+      else { const {error}=await sb.auth.signInWithPassword({email,password:pass,options:{captchaToken:await jetonCaptcha()}}); if(error) throw error; }
       S.authErr=""; await boot(); return;
     }catch(err){ S.authErr=errMsg(err); render(); }
     finally{ btn.disabled=false; } }
@@ -369,7 +385,7 @@ async function joinWithCode(code){
   code=(code||"").trim().toUpperCase(); if(!code) return;
   try{
     let { data:{session} } = await sb.auth.getSession();
-    if(!session){ const {data,error}=await sb.auth.signInAnonymously(); if(error) throw error; session=data.session; }
+    if(!session){ const {data,error}=await sb.auth.signInAnonymously({options:{captchaToken:await jetonCaptcha()}}); if(error) throw error; session=data.session; }
     const {error}=await sb.rpc("rejoindre_conducteur",{p_code:code}); if(error) throw error;
     S.authErr="";
     // Dream Chauffeur : le code reste dans l'adresse, pour que l'icône installée sur l'écran d'accueil s'ouvre déjà connectée
@@ -843,6 +859,7 @@ async function readDocument(file){
     if(error){ let detail=""; try{ detail=(await error.context.json()).error||""; }catch(e){}
       const t = /FunctionsFetchError|Failed to send/i.test(error.name+error.message) ? "La lecture automatique n'est pas encore activée sur votre espace."
         : detail==="cle_manquante" ? "La lecture automatique n'est pas encore activée (clé API manquante)."
+        : detail==="limite" ? "Limite quotidienne de lectures automatiques atteinte pour votre entreprise. Elle se remet à zéro demain ; en attendant, créez la course à la main."
         : "La lecture a échoué. Réessayez ou créez la course à la main.";
       throw {ui:t}; }
     const list=(res && Array.isArray(res.courses)) ? res.courses.filter(x=>x&&typeof x==="object") : [];
