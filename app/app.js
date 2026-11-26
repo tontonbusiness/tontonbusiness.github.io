@@ -289,7 +289,7 @@ function render(){
 }
 const after = {};
 /* points d'accroche pour les modules complémentaires (facturation, carnet d'adresses…) */
-const X = { attN:()=>attListe().length, attCheck:()=>attCheck(), catVeh, CAT_LIB, CAT_ORDRE, cmpTxt, views:{}, nav:null, onData:[], after, S, sb, $, esc, toast, errMsg, openModal, closeModal, render, loadData, EID, isStaff, frDate, todayIso, addDays };
+const X = { newCourse:p=>newCourse(p), attN:()=>attListe().length, attCheck:()=>attCheck(), catVeh, CAT_LIB, CAT_ORDRE, cmpTxt, views:{}, nav:null, onData:[], after, S, sb, $, esc, toast, errMsg, openModal, closeModal, render, loadData, EID, isStaff, frDate, todayIso, addDays };
 
 /* ---------- CONNEXION ---------- */
 function authShell(inner){ const img = MODE==="chauffeur" ? `<img src="icon-192.png" alt="" style="border-radius:12px">` : `<img src="logo-or.png" alt="Tonton Business" style="width:100%;max-width:260px;border-radius:12px">`;
