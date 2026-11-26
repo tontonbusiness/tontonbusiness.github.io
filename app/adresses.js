@@ -53,12 +53,16 @@ async function adresses(q,cp){ const k="a"+q+"|"+cp; if(cache.has(k)) return cac
 
 async function surCodePostal(g){
   const cp=cp5(g.cp.value); if(!cp){ if(cible===g.cp) cacher(); return; }
-  const n=++seq; let L=[]; try{ L=await communes(cp); }catch(e){ return; } if(n!==seq || document.activeElement!==g.cp) return;
+  const n=++seq; let L=[]; try{ L=await communes(cp); }catch(e){ return; } if(n!==seq) return;
+  if(cp5(g.cp.value)!==cp) return; // le code postal a changé entre-temps
   if(!L.length) { cacher(); return; } // code CEDEX ou inconnu : on laisse saisir la ville
   const deja=String(g.ville.value||"").trim();
+  // une seule commune : remplie même si l'on est déjà passé au champ suivant
   if(L.length===1){ if(!deja) poser(g.ville,L[0]); cacher(); return; }
   if(deja && L.some(v=>v.toLowerCase()===deja.toLowerCase())){ cacher(); return; }
-  montrer(g.cp, L.map(v=>({ v, html:`${esc(v)} <span style="opacity:.6">${cp}</span>` })), p=>{ poser(g.ville,p.v); g.ville.focus(); });
+  // plusieurs communes : la liste s'affiche sous le champ où l'on se trouve (code postal ou ville)
+  const ici = document.activeElement===g.cp ? g.cp : document.activeElement===g.ville ? g.ville : null; if(!ici) return;
+  montrer(ici, L.map(v=>({ v, html:`${esc(v)} <span style="opacity:.6">${cp}</span>` })), p=>{ poser(g.ville,p.v); g.ville.focus(); });
 }
 async function surAdresse(g){
   const q=String(g.adr.value||"").trim(); if(q.length<4 || /\b(?:BP|CS|TSA|CEDEX)\b/i.test(q)){ if(cible===g.adr) cacher(); return; }
@@ -71,7 +75,10 @@ document.addEventListener("input", e=>{ const g=groupe(e.target); if(!g || !e.is
   clearTimeout(minuteur);
   if(g.role==="cp") minuteur=setTimeout(()=>surCodePostal(g),150);
   else if(g.role==="adr") minuteur=setTimeout(()=>surAdresse(g),280);
-  else if(cible) cacher(); });
+  else if(cible && cible!==g.ville) cacher();
+  else if(g.role==="ville" && cible===g.ville && String(g.ville.value||"").trim()) cacher(); });
+// en arrivant dans une ville vide alors que le code postal est rempli : on propose les communes
+document.addEventListener("focusin", e=>{ const g=groupe(e.target); if(g && g.role==="ville" && !String(g.ville.value||"").trim() && cp5(g.cp.value)) surCodePostal(g); });
 document.addEventListener("keydown", e=>{ if(!cible || e.target!==cible || !items.length) return;
   if(e.key==="ArrowDown"){ e.preventDefault(); surligner((actif+1)%items.length); }
   else if(e.key==="ArrowUp"){ e.preventDefault(); surligner((actif-1+items.length)%items.length); }
