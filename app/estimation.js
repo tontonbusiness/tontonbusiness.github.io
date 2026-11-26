@@ -50,7 +50,7 @@ const dureeTxt = r => { if(!r.duree) return ""; let mn = r.dureeUnit==="hour" ? 
 /* ---------- écran ---------- */
 const champ = (p,k,lab,ph,w) => `<label class="fld" style="${w?"grid-column:1/-1":""}">${lab}<input class="fin" data-e="${p}.${k}" value="${esc(E[p][k])}" placeholder="${esc(ph||"")}" autocomplete="off"></label>`;
 const bloc = (p,titre) => `<div class="pan" style="flex:1;min-width:260px"><h2 style="margin:0">${titre}</h2>
-  <div style="display:grid;grid-template-columns:120px 1fr;gap:8px">${champ(p,"adr","Adresse (facultatif)","12 rue …",true)}${champ(p,"cp","Code postal","95500")}${champ(p,"ville","Ville","Gonesse")}</div></div>`;
+  <div style="display:grid;grid-template-columns:120px 1fr;gap:8px">${champ(p,"adr","Adresse (facultatif)","Tapez le début de l'adresse…",true)}${champ(p,"cp","Code postal","")}${champ(p,"ville","Ville","")}</div></div>`;
 
 T.views.estimation = () => {
   if(!T.isStaff()) return `<div class="empty">Rubrique réservée à l'exploitation.</div>`;
