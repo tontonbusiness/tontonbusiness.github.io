@@ -148,7 +148,10 @@ async function loadData(){
   if(!S.mem) return;
   const eid=EID(); const since=addDays(todayIso(),-400);
   const q = [
-    sb.from("courses").select("*").eq("entreprise_id",eid).or(`enl_date.gte.${since},enl_date.is.null`).order("enl_date",{ascending:false}).limit(3000),
+    // conducteur : ses courses sans les informations commerciales (prix, coûts, sous-traitance), via la base
+    S.mem.role==="conducteur" ? sb.rpc("mes_courses",{p_depuis:since}).then(x=> x.error && /mes_courses|PGRST202|function/i.test(x.error.message+x.error.code)
+        ? sb.from("courses").select("*").eq("entreprise_id",eid).or(`enl_date.gte.${since},enl_date.is.null`).order("enl_date",{ascending:false}).limit(3000) : x)
+      : sb.from("courses").select("*").eq("entreprise_id",eid).or(`enl_date.gte.${since},enl_date.is.null`).order("enl_date",{ascending:false}).limit(3000),
     sb.from("conducteurs").select("*").eq("entreprise_id",eid),
     sb.from("camions").select("*").eq("entreprise_id",eid),
     sb.from("remorques").select("*").eq("entreprise_id",eid)
