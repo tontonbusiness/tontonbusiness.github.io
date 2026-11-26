@@ -514,7 +514,7 @@ function openPiece(id){
   openModal(`<div data-lock="1" style="display:flex;flex-direction:column;gap:14px"><div class="bar"><h2 style="flex:1">${LAB[p.type].un} ${esc(p.numero||"")}</h2>${chip(p)}</div>
     ${enRetard(p)?`<div class="alert" style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap"><span><b>À relancer :</b> échéance dépassée de ${joursRetard(p)} jour${joursRetard(p)>1?"s":""}. ${relTxt(p)||"Aucune relance envoyée."}</span><button type="button" class="btn btn-ghost btn-sm" data-f="relance" data-client="${esc(p.client_id||"")}">Relancer le client</button></div>`:""}
     ${paper(p)}
-    <div class="row-btns" style="align-items:flex-end">${acts}<button type="button" class="btn btn-ghost" data-f="print">Imprimer / PDF</button><button type="button" class="btn btn-accent" data-act="close">Fermer</button></div></div>`);
+    <div class="row-btns" style="align-items:flex-end">${acts}${nbTransports(p)?`<button type="button" class="btn btn-ghost" data-pdffact="${esc(p.id)}">CMR en PDF</button>`:""}<button type="button" class="btn btn-ghost" data-f="print">Imprimer / PDF</button><button type="button" class="btn btn-accent" data-act="close">Fermer</button></div></div>`);
 }
 function drawEditor(){
   const p=F.draft; const lab=LAB[p.type]; const t=totals(p.lignes);

@@ -690,7 +690,7 @@ function courseForm(c,opts={}){
   const camOpts=`<option value="">— Aucun —</option>`+activeCams().map(k=>`<option value="${esc(k.id)}" ${c.camionId===k.id?"selected":""}>${esc(k.immat)} · ${esc(k.type||"")}</option>`).join("");
   const remOpts=`<option value="">— Aucune —</option>`+activeRems().map(k=>`<option value="${esc(k.id)}" ${c.remorqueId===k.id?"selected":""}>${esc(k.immat)}</option>`).join("");
   const stOpts=Object.entries(STATUTS).map(([k,v])=>`<option value="${k}" ${(c.statut||"a_planifier")===k?"selected":""}>${v.l}</option>`).join("");
-  const docs=(c.docs||[]).map((d,i)=>`<li><button type="button" class="linkbtn" data-doc="${esc(d.path)}">${esc(d.type==="confirmation"?"Confirmation client":d.type==="bl"?"BL / CMR":d.type==="signature"?"Signature du destinataire":d.type==="reserve"?"Photo de la réserve":"Document")} — ${esc(d.nom||"")}</button></li>`).join("");
+  const docs=(c.docs||[]).map((d,i)=>`<li><button type="button" class="linkbtn" data-doc="${esc(d.path)}">${esc(d.type==="confirmation"?"Confirmation client":d.type==="bl"?"BL / CMR":d.type==="signature"?"Signature du destinataire":d.type==="reserve"?"Photo de la réserve":"Document")} — ${esc(d.nom||"")}</button>${c.id?` · <button type="button" class="linkbtn" data-pdf="${esc(d.path)}" data-cid="${esc(c.id)}" title="Télécharger ce document en PDF">PDF</button>`:""}</li>`).join("");
   const incs=incOf(c);
   const incHtml = incs.length ? `<div class="${incNew(c).length?"alert":""}" style="display:flex;flex-direction:column;gap:6px"><b>Problèmes signalés par le conducteur</b><ul style="margin:0;padding-left:18px">${incs.map(i=>`<li>${esc(i.heure||"")}${i.le?" ("+esc(frDate(String(i.le).slice(0,10),{day:"numeric",month:"short"}))+")":""} · <b style="color:inherit">${esc(INC[i.type]||"Autre")}</b>${i.commentaire?" — "+esc(i.commentaire):""}${i.path?` · <button type="button" class="linkbtn" data-doc="${esc(i.path)}">Voir la photo</button>`:""}${i.vu?` <span class="muted">(traité)</span>`:""}</li>`).join("")}</ul>${incNew(c).length?`<button type="button" class="btn btn-ghost btn-sm" data-act="incvu" style="align-self:flex-start">Marquer comme traité</button>`:""}</div>` : "";
   const sigHtml = c.signataire ? `<div><b>Livraison signée par :</b> ${esc(c.signataire)}</div>` : "";
@@ -718,7 +718,7 @@ function courseForm(c,opts={}){
     <label class="fld wide">Réserves à la livraison<textarea id="f_reserve" placeholder="Vide = sans réserve">${esc(c.reserve||"")}</textarea></label></fieldset>`}
   <fieldset><legend>Consignes</legend>${grp("i")}</fieldset>
   ${incHtml}${sigHtml}${c.id&&X.courseExtra?X.courseExtra(c):""}
-  ${docs?`<div><b>Documents</b><ul style="margin:6px 0 0">${docs}</ul></div>`:""}
+  ${docs?`<div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>Documents</b>${c.id?`<button type="button" class="btn btn-ghost btn-sm" data-pdfall="${esc(c.id)}">Tous les documents en PDF</button>`:""}</div><ul style="margin:6px 0 0">${docs}</ul></div>`:""}
   <div class="row-btns" id="formBtns">
     ${opts.canDelete?`<button type="button" class="btn btn-danger" data-act="askdel" style="margin-right:auto">Supprimer</button>`:""}
     <button type="button" class="btn btn-ghost" data-act="${opts.draft?"impback":"close"}">${opts.draft?"Retour":"Annuler"}</button>
