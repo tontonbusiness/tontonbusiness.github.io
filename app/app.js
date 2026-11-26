@@ -13,10 +13,19 @@ function jetonCaptcha(){
   const charger = window.turnstile ? Promise.resolve() : new Promise((ok,ko)=>{ const s=document.createElement("script");
     s.src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"; s.async=true; s.onload=ok; s.onerror=()=>ko(new Error("captcha_indisponible")); document.head.appendChild(s); });
   return charger.then(()=>new Promise((ok,ko)=>{
-    let box=document.getElementById("tsBox"); if(!box){ box=document.createElement("div"); box.id="tsBox"; box.style.cssText="position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:9999"; document.body.appendChild(box); }
+    // bandeau centré en bas de l'écran, visible seulement si Cloudflare demande de cocher la case
+    let box=document.getElementById("tsBox");
+    if(!box){ box=document.createElement("div"); box.id="tsBox";
+      box.style.cssText="position:fixed;left:0;right:0;bottom:12px;z-index:9999;display:flex;flex-direction:column;align-items:center;gap:6px;padding:0 8px;pointer-events:none";
+      box.innerHTML=`<div id="tsMsg" style="display:none;background:#1F3A5F;color:#fff;font:600 14px system-ui,sans-serif;padding:6px 12px;border-radius:8px;text-align:center">Vérification de sécurité : cochez la case ci-dessous</div><div id="tsWidget" style="width:300px;max-width:100%;pointer-events:auto"></div>`;
+      document.body.appendChild(box); }
     tsAttente={ok,ko};
-    const fini=t=>{ const a=tsAttente; tsAttente=null; if(a) a.ok(t); };
-    if(tsWidget===null) tsWidget=window.turnstile.render(box,{sitekey:key,language:"fr",appearance:"interaction-only",callback:fini,"error-callback":()=>{ const a=tsAttente; tsAttente=null; if(a) a.ko(new Error("captcha_echec")); }});
+    const msg=v=>{ const m=document.getElementById("tsMsg"); if(m) m.style.display=v?"block":"none"; };
+    const fini=t=>{ msg(false); const a=tsAttente; tsAttente=null; if(a) a.ok(t); };
+    if(tsWidget===null) tsWidget=window.turnstile.render("#tsWidget",{sitekey:key,language:"fr",appearance:"interaction-only",callback:fini,
+      "before-interactive-callback":()=>msg(true),
+      "after-interactive-callback":()=>msg(false),
+      "error-callback":()=>{ msg(false); const a=tsAttente; tsAttente=null; if(a) a.ko(new Error("captcha_echec")); }});
     else window.turnstile.reset(tsWidget);
   }));
 }
