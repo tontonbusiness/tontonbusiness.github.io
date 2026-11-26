@@ -806,7 +806,9 @@ function conflitCourse(id,champs,bouton){
   if(!box){ box=document.createElement("div"); box.id="conflitBox"; f.prepend(box); }
   box.setAttribute("role","alert");
   box.style.cssText="border:2px solid #C0392B;background:#FDECEA;color:#3A1410;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14px;line-height:1.45";
-  const noms=champs.map(k=>esc(k.replace(/([A-Z])/g," $1").toLowerCase())).join(", ");
+  const SECT={e:"enlèvement",l:"livraison"}, AUTRES={conducteurId:"conducteur",camionId:"véhicule",remorqueId:"remorque",statut:"statut",arriveeEnl:"arrivée à l'enlèvement",chargeEnl:"chargement",arriveeLiv:"arrivée à la livraison",livre:"livraison faite",reserve:"réserves",facturee:"facturée",commandes:"commandes",sousTraitantId:"sous-traitant",couts:"coûts",rolePrincipal:"rôle",partPrincipal:"part"};
+  const nomChamp=k=>{ const f=F.find(x=>x[0]===k); if(f) return f[1].charAt(0).toLowerCase()+f[1].slice(1)+(SECT[f[3]]&&!/enlèvement|livraison/i.test(f[1])?" ("+SECT[f[3]]+")":""); return AUTRES[k]||k.replace(/([A-Z])/g," $1").toLowerCase(); };
+  const noms=champs.map(k=>esc(nomChamp(k))).join(", ");
   box.innerHTML=`<b>Cette course a été modifiée par quelqu'un d'autre</b> (un autre exploitant ou le conducteur) depuis que vous l'avez ouverte, sur : ${noms}. Vos changements <b>n'ont pas été enregistrés</b>.
     <div class="row-btns" style="margin-top:10px;justify-content:flex-start"><button type="button" class="btn btn-ghost btn-sm" id="conflitVoir">Voir la version à jour</button><button type="button" class="btn btn-accent btn-sm" id="conflitForcer">Enregistrer quand même mes changements</button></div>`;
   box.scrollIntoView({block:"nearest"});
