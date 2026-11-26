@@ -7,22 +7,20 @@ const { S, sb, $, esc, toast, render, EID } = T;
 /* ---------- grille tarifaire HT : enregistrée uniquement dans les paramètres de l'entreprise (jamais dans ce fichier,
    qui est public) et lisible seulement par l'exploitation ---------- */
 const VEH = [["v20","20 m³"],["t12","12 T"],["t14","14 T"],["t19","19 T"],["semi","Semi 44 T"]];
-const PREST = [["ld","Longue distance","/km"],["reg","Régional","/km"],["idf","IDF","/km"],["urg","Urgent","/km"],["jour","Forfait journée",""],["heure","Heure supplémentaire",""]];
-const VIDE = { ld:null, reg:null, idf:null, urg:null, jour:null, heure:null };
-const SEUIL = 300;
-const IDF = ["75","77","78","91","92","93","94","95"];
-const E = T.E = { a:{adr:"",cp:"",ville:""}, b:{adr:"",cp:"",ville:""}, veh:"semi", prest:"", urgent:false, heures:"", client:"",
+const PREST = [["km","Prix au km","/km"],["exp","Express","/km"],["jour","Forfait journée",""],["heure","Heure supplémentaire",""]];
+const VIDE = { km:null, exp:null, jour:null, heure:null };
+const E = T.E = { a:{adr:"",cp:"",ville:""}, b:{adr:"",cp:"",ville:""}, veh:"semi", express:false, heures:"", client:"",
   res:null, calc:false, err:"", grille:false, perime:false };
 
 const money = n => (Number(n)||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
 const num = s => { const v=Number(String(s??"").replace(",",".").replace(/\s/g,"")); return isFinite(v)?v:null; };
 const r2 = x => Math.round((Number(x)||0)*100)/100;
 const tarifs = () => { const p=(T.fx&&T.fx.ready()&&T.fx.param())||{}; const t=(p.facturation&&p.facturation.tarifs)||{};
-  const out={ seuil: num(t.seuil)||SEUIL }; VEH.forEach(([k])=>{ out[k]=Object.assign({},VIDE,t[k]||{}); }); return out; };
-const grilleVide = () => { const t=tarifs(); return VEH.every(([v])=>["ld","reg","idf","urg"].every(p=>t[v][p]==null)); };
-const dep = cp => { const c=String(cp||"").trim(); return /^\d{5}$/.test(c) ? c.slice(0,2) : ""; };
-const prestAuto = km => { const da=dep(E.a.cp), db=dep(E.b.cp); if(da && db && IDF.includes(da) && IDF.includes(db)) return "idf"; return km!=null && km>tarifs().seuil ? "ld" : "reg"; };
-const prestFinale = () => E.urgent ? "urg" : (E.prest || (E.res ? prestAuto(E.res.km) : "reg"));
+  const out={}; VEH.forEach(([k])=>{ const o=t[k]||{}; out[k]=Object.assign({},VIDE,o);
+    // ancienne grille (longue distance / urgent) : reprise si la nouvelle n'est pas encore remplie
+    if(out[k].km==null && o.ld!=null) out[k].km=o.ld; if(out[k].exp==null && o.urg!=null) out[k].exp=o.urg; }); return out; };
+const grilleVide = () => { const t=tarifs(); return VEH.every(([v])=>t[v].km==null); };
+const prestFinale = () => E.express ? "exp" : "km";
 const lieuTxt = p => [p.adr, [p.cp,p.ville].filter(Boolean).join(" ")].filter(Boolean).join(", ");
 const vehLib = k => (VEH.find(v=>v[0]===k)||["",""])[1];
 const prestLib = k => (PREST.find(p=>p[0]===k)||["",""])[1];
@@ -59,8 +57,6 @@ T.views.estimation = () => {
   if(grilleVide() && !E.grille) E.grille=true;
   const t=tarifs(), c=calcul(), clients=(T.fx&&T.fx.ready()?T.fx.clients():[]).filter(x=>!x.sous_traitant).sort((x,y)=>x.nom.localeCompare(y.nom));
   const vehBtns = VEH.map(([k,l])=>`<button type="button" class="btn btn-sm ${E.veh===k?"btn-navy":"btn-ghost"}" data-est="veh" data-v="${k}" aria-pressed="${E.veh===k}">${l}</button>`).join("");
-  const auto = E.res ? prestAuto(E.res.km) : "";
-  const prestOpts = `<option value="">Automatique${auto?" ("+prestLib(auto)+")":""}</option>`+["ld","reg","idf"].map(k=>`<option value="${k}" ${E.prest===k?"selected":""}>${prestLib(k)}</option>`).join("");
   const resultat = E.calc ? `<div class="pan"><div class="empty">Calcul de l'itinéraire…</div></div>`
     : E.err ? `<div class="pan"><div class="alert">${esc(E.err)}</div></div>`
     : (E.res && c && c.manque) ? `<div class="pan"><div class="alert">Trajet aller : ${E.res.km.toLocaleString("fr-FR")} km. Le tarif « ${esc(prestLib(c.pr))} » du ${esc(vehLib(E.veh))} n'est pas renseigné dans la grille ci-dessous.</div></div>`
@@ -70,7 +66,7 @@ T.views.estimation = () => {
         <h2 style="margin:0 0 6px">Prix estimé : <span class="num" style="font-size:28px">${money(c.total)}</span> HT</h2>
         <div style="font-size:14px;line-height:1.7">
           Trajet aller : <b class="num">${E.res.km.toLocaleString("fr-FR")} km</b>${dureeTxt(E.res)?` · environ ${dureeTxt(E.res)} de route`:""}<br>
-          Aller + retour à vide : <b class="num">${c.kmFact.toLocaleString("fr-FR")} km</b> × ${money(c.pu)} (${esc(vehLib(E.veh))}, ${esc(prestLib(c.pr))}) = <b class="num">${money(c.prixKm)}</b><br>
+          Aller + retour à vide : <b class="num">${c.kmFact.toLocaleString("fr-FR")} km</b> × ${money(c.pu)} (${esc(vehLib(E.veh))}${c.pr==="exp"?", Express":""}) = <b class="num">${money(c.prixKm)}</b><br>
           ${c.hs?`Heures supplémentaires : ${c.hs.toLocaleString("fr-FR")} h × ${money(c.heure)} = <b class="num">${money(c.prixH)}</b><br>`:""}
           ${c.jour?`<span class="muted">Pour comparer : forfait journée ${esc(vehLib(E.veh))} = ${money(c.jour)} HT.</span>`:""}
         </div></div>
@@ -84,14 +80,13 @@ T.views.estimation = () => {
     <div class="tbl-wrap"><table><thead><tr><th>Prestation</th>${VEH.map(v=>`<th style="text-align:right">${v[1]}</th>`).join("")}</tr></thead><tbody>
     ${PREST.map(([p,l,u])=>`<tr><td>${l}${u?` <span class="muted">${u}</span>`:""}</td>${VEH.map(([v])=>`<td style="text-align:right">${E.grille?`<input class="fin num" style="width:84px;text-align:right" inputmode="decimal" data-g="${v}.${p}" value="${t[v][p]==null?"":esc(String(t[v][p]).replace(".",","))}" placeholder="—" aria-label="${esc(l)} ${esc(vehLib(v))}">`:(t[v][p]==null?`<span class="muted">—</span>`:`<span class="num">${money(t[v][p])}</span>`)}</td>`).join("")}</tr>`).join("")}
     </tbody></table></div>
-    ${E.grille?`<div class="bar" style="gap:10px"><label class="fld" style="flex-direction:row;align-items:center;gap:8px">Régional jusqu'à<input class="fin num" style="width:80px" inputmode="numeric" data-g="seuil" value="${esc(t.seuil)}">km aller, Longue distance au-delà</label><span style="flex:1"></span><button type="button" class="btn btn-accent" data-est="gsave">Enregistrer la grille</button></div>`
-      :`<span class="muted" style="font-size:13px">${grilleVide()?"<b>Renseignez votre grille pour obtenir des prix.</b> ":""}Prestation automatique : IDF si les deux codes postaux sont en Île-de-France, Régional jusqu'à ${t.seuil} km aller, Longue distance au-delà. La grille n'est visible que par l'exploitation.</span>`}</div>`;
+    ${E.grille?`<div class="bar" style="gap:10px"><span style="flex:1"></span><button type="button" class="btn btn-accent" data-est="gsave">Enregistrer la grille</button></div>`
+      :`<span class="muted" style="font-size:13px">${grilleVide()?"<b>Renseignez votre grille pour obtenir des prix.</b> ":""}Prix = km aller × 2 (retour à vide) × prix au km du véhicule, ou tarif Express si la case est cochée. La grille n'est visible que par l'exploitation.</span>`}</div>`;
   return `<div class="bar"><h1>Estimer un prix</h1><span class="muted">Un client appelle : point A, point B, et le prix tout de suite.</span></div>
   <div style="display:flex;gap:12px;flex-wrap:wrap">${bloc("a","Point A · enlèvement")}${bloc("b","Point B · livraison")}</div>
   <div class="pan"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><b style="margin-right:6px">Véhicule</b>${vehBtns}</div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-      <label class="fld">Prestation<select class="fin" data-e="prest" ${E.urgent?"disabled":""}>${prestOpts}</select></label>
-      <label style="display:flex;gap:8px;align-items:center;font-weight:600;min-height:40px"><input type="checkbox" data-e="urgent" ${E.urgent?"checked":""} style="width:20px;height:20px"> Urgent</label>
+      <label style="display:flex;gap:8px;align-items:center;font-weight:600;min-height:40px"><input type="checkbox" data-e="express" ${E.express?"checked":""} style="width:20px;height:20px"> Express</label>
       <label class="fld">Heures supplémentaires<input class="fin num" style="width:110px" inputmode="decimal" data-e="heures" value="${esc(E.heures)}" placeholder="0"></label>
       <label class="fld" style="min-width:220px;flex:1">Client (facultatif)<input class="fin" data-e="client" list="estClients" value="${esc(E.client)}" placeholder="Nom du client"><datalist id="estClients">${clients.map(x=>`<option value="${esc(x.nom)}">`).join("")}</datalist></label>
       <button type="button" class="btn btn-accent" data-est="calc" style="min-width:160px">Calculer le prix</button>
@@ -114,14 +109,13 @@ async function dessiner(){
 
 /* ---------- saisie (gardée en mémoire : l'écran peut se redessiner à tout moment) ---------- */
 document.addEventListener("input", e=>{ const k=e.target.dataset && e.target.dataset.e; if(!k || S.view!=="estimation") return;
-  if(k==="urgent") return;
+  if(k==="express") return;
   if(k.includes(".")){ const [p,f]=k.split("."); E[p][f]=e.target.value;
     // lieu modifié après un calcul : on le signale sans redessiner l'écran (le curseur reste dans le champ)
     if(E.res && !E.perime){ E.perime=true; const m=$("#estPerime"); if(m) m.hidden=false; } }
   else E[k]=e.target.value; });
 document.addEventListener("change", e=>{ const k=e.target.dataset && e.target.dataset.e; if(!k || S.view!=="estimation") return;
-  if(k==="urgent"){ E.urgent=e.target.checked; render(); }
-  else if(k==="prest"){ E.prest=e.target.value; render(); }
+  if(k==="express"){ E.express=e.target.checked; render(); }
   else if(k==="heures"){ E.heures=e.target.value; render(); }
   });
 document.addEventListener("keydown", e=>{ if(e.key==="Enter" && S.view==="estimation" && e.target.dataset && e.target.dataset.e && e.target.tagName==="INPUT"){ e.preventDefault(); lancer(); } });
@@ -134,15 +128,16 @@ async function lancer(){
   E.calc=false; render();
 }
 function detail(c){
-  return `Estimation ${vehLib(E.veh)} — ${prestLib(c.pr)}\n${lieuTxt(E.a)} → ${lieuTxt(E.b)}\nTrajet aller ${E.res.km.toLocaleString("fr-FR")} km, aller + retour ${c.kmFact.toLocaleString("fr-FR")} km × ${money(c.pu)} = ${money(c.prixKm)}`+
+  return `Estimation ${vehLib(E.veh)}${c.pr==="exp"?" — Express":""}\n${lieuTxt(E.a)} → ${lieuTxt(E.b)}\nTrajet aller ${E.res.km.toLocaleString("fr-FR")} km, aller + retour ${c.kmFact.toLocaleString("fr-FR")} km × ${money(c.pu)} = ${money(c.prixKm)}`+
     (c.hs?`\nHeures supplémentaires : ${c.hs} h × ${money(c.heure)} = ${money(c.prixH)}`:"")+`\nTotal : ${money(c.total)} HT`;
 }
 async function enregistrerGrille(){
-  const t=tarifs(); const nouv={ seuil:t.seuil }; VEH.forEach(([v])=>{ nouv[v]=Object.assign({},t[v]); });
+  const t=tarifs(); const nouv={}; VEH.forEach(([v])=>{ nouv[v]=Object.assign({},t[v]); });
   let ko=false;
   document.querySelectorAll("[data-g]").forEach(i=>{ const k=i.dataset.g; const vide=String(i.value).trim()===""; const v=vide?null:num(i.value);
-    if(!vide && (v==null || v<0)){ ko=true; i.setAttribute("aria-invalid","true"); return; } if(k==="seuil" && v==null) return;
-    if(k==="seuil") nouv.seuil=Math.round(v); else { const [vh,p]=k.split("."); nouv[vh][p]=v; } });
+    if(!vide && (v==null || v<0)){ ko=true; i.setAttribute("aria-invalid","true"); return; }
+    const [vh,p]=k.split("."); nouv[vh][p]=v; });
+  VEH.forEach(([v])=>{ delete nouv[v].ld; delete nouv[v].reg; delete nouv[v].idf; delete nouv[v].urg; });
   if(ko){ toast("Une valeur de la grille n'est pas un nombre valable."); return; }
   const p=T.fx.param(); const fa=Object.assign({},p.facturation||{},{tarifs:nouv});
   const {error}=await sb.from("parametres").upsert({entreprise_id:EID(),societe:p.societe||{},facturation:fa},{onConflict:"entreprise_id"});
@@ -163,7 +158,7 @@ document.addEventListener("click", async e=>{
     }); }
   else if(a==="devis"){ const c=calcul(); if(!c || !T.fx) return; if(E.perime){ toast("Les adresses ont changé : recalculez le prix d'abord."); return; } el.disabled=true;
     const cl=T.fx.clientByName ? T.fx.clientByName(E.client) : null;
-    const lignes=[{ designation:`Transport ${vehLib(E.veh)} ${lieuTxt(E.a)} → ${lieuTxt(E.b)} (${prestLib(c.pr)}, ${c.kmFact.toLocaleString("fr-FR")} km aller + retour)`, qte:1, pu:c.prixKm, tva:T.fx.tvaDef() }];
+    const lignes=[{ designation:`Transport ${vehLib(E.veh)} ${lieuTxt(E.a)} → ${lieuTxt(E.b)} (${c.pr==="exp"?"Express, ":""}${c.kmFact.toLocaleString("fr-FR")} km aller + retour)`, qte:1, pu:c.prixKm, tva:T.fx.tvaDef() }];
     if(c.hs) lignes.push({ designation:`Heures supplémentaires ${vehLib(E.veh)}`, qte:c.hs, pu:c.heure, tva:T.fx.tvaDef() });
     const r=await T.fx.newPiece("devis",{ client_id:cl?cl.id:null, lignes });
     el.disabled=false; if(r.error){ toast(T.fx.fErr(r.error)); return; }
