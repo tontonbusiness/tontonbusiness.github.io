@@ -31,7 +31,8 @@ function montrer(el, props, onChoix){
   const b=liste(); cible=el; items=props; choix=onChoix; actif=-1;
   if(!props.length){ cacher(); return; }
   b.innerHTML=props.map((p,i)=>`<button type="button" role="option" data-i="${i}" style="display:block;width:100%;text-align:left;padding:9px 12px;border:0;border-bottom:1px solid var(--line,#eee);background:transparent;color:inherit;font:inherit;font-size:14px;cursor:pointer">${p.html}</button>`).join("");
-  const r=el.getBoundingClientRect(); b.style.left=Math.max(4,r.left)+"px"; b.style.top=(r.bottom+4)+"px"; b.style.width=Math.max(r.width,260)+"px"; b.style.display="block";
+  const r=el.getBoundingClientRect(), w=Math.min(Math.max(r.width,260), window.innerWidth-8);
+  b.style.width=w+"px"; b.style.left=Math.max(4, Math.min(r.left, window.innerWidth-w-4))+"px"; b.style.top=(r.bottom+4)+"px"; b.style.display="block";
   el.setAttribute("aria-expanded","true");
 }
 function cacher(){ if(box) box.style.display="none"; if(cible) cible.removeAttribute("aria-expanded"); cible=null; items=[]; actif=-1; }
