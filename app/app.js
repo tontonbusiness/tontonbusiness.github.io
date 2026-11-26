@@ -124,6 +124,7 @@ function toastAct(html,ms){ const t=$("#toast"); t.innerHTML=html; t.hidden=fals
 function errMsg(e){ const m=(e&&(e.message||e.error_description||e.msg))||"";
   if(/code_invalide/.test(m)) return "Ce code n'est pas valable ou a expiré (7 jours). Vérifie-le, ou demande un nouveau code à ton exploitation.";
   if(/captcha/i.test(m)) return "Vérification anti-robot impossible. Rechargez la page et réessayez.";
+  if(/essai_termine/.test(m)) return MODE==="chauffeur" ? "L'accès de ton entreprise à Mobilog est suspendu. Préviens ton exploitation." : "Essai gratuit terminé : vos données restent consultables, mais rien ne peut être créé ni modifié. Contactez contact@tontonbusiness.com.";
   if(/code_utilise/.test(m)) return "Ce code a déjà servi. Demande un nouveau code à ton exploitation.";
   if(/deja_exploitant/.test(m)) return "Ce navigateur est connecté avec un compte d'exploitation. Ouvrez Dream Chauffeur sur le téléphone du conducteur.";
   if(/deja_membre/.test(m)) return "Ce compte est déjà rattaché à une entreprise.";
@@ -1372,7 +1373,7 @@ async function boot(){
   if(session){
     const {data,error}=await sb.from("membres").select("entreprise_id,role,conducteur_id").eq("user_id",session.user.id).limit(1);
     if(!error && data && data[0]){ S.mem=data[0];
-      const {data:ent}=await sb.from("entreprises").select("id,nom").eq("id",S.mem.entreprise_id).single(); S.entreprise=ent||{nom:""};
+      const {data:ent}=await sb.from("entreprises").select("*").eq("id",S.mem.entreprise_id).single(); S.entreprise=ent||{nom:""};
       readHash(); render(); signaler(); await loadData(); subscribe(); pushSync(); if(isStaff()){ attCheck(); clearInterval(attTimer); attTimer=setInterval(attCheck,60000); } return; }
   }
   render();
