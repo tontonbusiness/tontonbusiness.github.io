@@ -767,7 +767,34 @@ function openCourse(id){
   $("#cForm").addEventListener("submit",async e=>{ e.preventDefault(); const o=readForm(c);
     const affL=$("#affRows")?affLire():null; if(affL){ const er=affControle(o,affL); if(er){ toast(er); return; } }
     if(!avecEnvoi(e,o)) return; const envoi=o.statut==="envoyee" && c.statut!=="envoyee";
-    if(await saveCourse(c.id,o)){ if(affL) await affSync(c.id,affL); closeModal(); if(envoi) annonceEnvoi([Object.assign({},c,o)]); else toast("Course enregistrée"); } });
+    // n'envoyer que les champs modifiés dans la fiche, et vérifier que personne ne les a changés entre-temps
+    const modif=Object.keys(o).filter(k=>!["id","entrepriseId","createdAt","updatedAt"].includes(k) && o[k]!==undefined && !memeValeur(o[k],c[k]));
+    if(modif.length && $("#cForm").dataset.forcer!=="1"){
+      const cols=[...new Set(modif.map(camel2snake))].join(",");
+      const {data:cur,error:ce}=await sb.from("courses").select(cols).eq("id",c.id).maybeSingle();
+      if(ce){ toast(errMsg(ce)); return; }
+      if(!cur){ toast("Cette course n'existe plus (supprimée entre-temps)."); return; }
+      const actuel=fromDb(cur); const conflits=modif.filter(k=>!memeValeur(actuel[k],c[k]) && !memeValeur(actuel[k],o[k]));
+      if(conflits.length){ conflitCourse(c.id,conflits,e.submitter); return; } }
+    const patch={}; modif.forEach(k=>patch[k]=o[k]);
+    if(!modif.length || await saveCourse(c.id,patch)){ if(affL) await affSync(c.id,affL); closeModal(); if(envoi) annonceEnvoi([Object.assign({},c,o)]); else toast("Course enregistrée"); } });
+}
+// compare deux valeurs de fiche (vide = null, nombres écrits en texte, heures 08:00 / 08:00:00, listes)
+function memeValeur(a,b){ const n=v=>{ if(v===undefined||v===null||v==="") return null; if(typeof v==="object") return JSON.stringify(v);
+    const t=String(v).trim(); if(/^\d{2}:\d{2}(:\d{2})?$/.test(t)) return t.slice(0,5); if(t!=="" && !isNaN(Number(t))) return String(Number(t)); return t; };
+  return n(a)===n(b); }
+// quelqu'un d'autre (exploitant ou conducteur) a modifié les mêmes champs : on prévient au lieu d'écraser
+function conflitCourse(id,champs,bouton){
+  const f=$("#cForm"); if(!f) return; let box=$("#conflitBox");
+  if(!box){ box=document.createElement("div"); box.id="conflitBox"; f.prepend(box); }
+  box.setAttribute("role","alert");
+  box.style.cssText="border:2px solid #C0392B;background:#FDECEA;color:#3A1410;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14px;line-height:1.45";
+  const noms=champs.map(k=>esc(k.replace(/([A-Z])/g," $1").toLowerCase())).join(", ");
+  box.innerHTML=`<b>Cette course a été modifiée par quelqu'un d'autre</b> (un autre exploitant ou le conducteur) depuis que vous l'avez ouverte, sur : ${noms}. Vos changements <b>n'ont pas été enregistrés</b>.
+    <div class="row-btns" style="margin-top:10px;justify-content:flex-start"><button type="button" class="btn btn-ghost btn-sm" id="conflitVoir">Voir la version à jour</button><button type="button" class="btn btn-accent btn-sm" id="conflitForcer">Enregistrer quand même mes changements</button></div>`;
+  box.scrollIntoView({block:"nearest"});
+  $("#conflitVoir").onclick=async()=>{ closeModal(); await loadData(); openCourse(id); };
+  $("#conflitForcer").onclick=()=>{ f.dataset.forcer="1"; f.requestSubmit(bouton && bouton.form===f ? bouton : undefined); };
 }
 function newCourse(prefill){
   const c=Object.assign({enlDate:S.date,statut:"a_planifier"},prefill||{});
