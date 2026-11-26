@@ -14,7 +14,7 @@ function etat(){
   if(e.abonnement==="suspendu") return { fini:true, txt:`<b>Accès suspendu.</b> Vos données sont conservées et consultables, mais rien ne peut être modifié. Contactez <a href="mailto:${CONTACT}" style="color:inherit">${CONTACT}</a>.` };
   if(!e.essai_fin) return null;
   const n=jours(e.essai_fin);
-  if(n<0) return { fini:true, txt:`<b>Votre essai gratuit est terminé</b> depuis le ${esc(dateFr(e.essai_fin))}. Vos données sont conservées et consultables, mais rien ne peut plus être créé ni modifié. Pour continuer avec Mobilog : <a href="mailto:${CONTACT}?subject=${encodeURIComponent("Abonnement Mobilog — "+(e.nom||""))}" style="color:inherit">${CONTACT}</a>.` };
+  if(n<0) return { fini:true, txt:`<b>Votre essai gratuit s’est terminé le ${esc(dateFr(e.essai_fin))}.</b>. Vos données sont conservées et consultables, mais rien ne peut plus être créé ni modifié. Pour continuer avec Mobilog : <a href="mailto:${CONTACT}?subject=${encodeURIComponent("Abonnement Mobilog — "+(e.nom||""))}" style="color:inherit">${CONTACT}</a>.` };
   const reste = n===0 ? "dernier jour aujourd'hui" : n===1 ? "il reste 1 jour" : `il reste ${n} jours`;
   return { fini:false, urgent:n<=5, txt:`<b>Essai gratuit</b> — ${reste} (jusqu'au ${esc(dateFr(e.essai_fin))} inclus). Pour continuer ensuite : <a href="mailto:${CONTACT}?subject=${encodeURIComponent("Abonnement Mobilog — "+(e.nom||""))}" style="color:inherit">${CONTACT}</a>.` };
 }
