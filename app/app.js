@@ -1342,6 +1342,9 @@ document.addEventListener("click",async e=>{
   else if(d.impdel!==undefined){ S.importList.splice(Number(d.impdel),1); showImport(); }
 });
 document.addEventListener("change",e=>{
+  // fiche course : en choisissant le conducteur, on propose son camion habituel (comme dans le planning)
+  if(e.target.id==="f_conducteurId"){ const k=condById(e.target.value); const cs=$("#f_camionId");
+    if(k?.camionId && cs && !cs.value && [...cs.options].some(o=>o.value===k.camionId)){ cs.value=k.camionId; cs.dispatchEvent(new Event("change",{bubbles:true})); } }
   if(e.target.id==="f_sousTraitantId"){ const on=!!e.target.value; ["f_conducteurId","f_camionId","f_remorqueId"].forEach(i=>{ const el=$("#"+i); if(el){ if(on) el.value=""; el.disabled=on; } }); if(on){ const w=$("#remWrap"); if(w) w.hidden=true; const stt=$("#f_statut"); if(stt && stt.value==="a_planifier") stt.value="planifiee"; } }
     if(e.target.id==="f_camionId"){ const w=$("#remWrap"); if(w){ w.hidden=!isTracteur(e.target.value); const cam=camById(e.target.value); const rs=$("#f_remorqueId"); if(rs && !rs.value && cam?.remorqueId) rs.value=cam.remorqueId; } }
   if(e.target.id==="meSel"){ S.me=e.target.value; store.set("tp_me",S.me); render(); }
