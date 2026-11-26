@@ -260,13 +260,34 @@ const kmCle = c => [c.enlAdresse,c.enlCp,c.enlVille,">",c.livAdresse,c.livCp,c.l
 const kmPret = c => !!((c.enlVille||c.enlCp) && (c.livVille||c.livCp));
 const kmActif = () => S.courses.some(c=>"km" in c);
 const kmTxt = v => v==null ? "—" : Number(v).toLocaleString("fr-FR",{maximumFractionDigits:1})+" km";
+// retire d'une adresse ce qui empêche la recherche : boîte postale, CEDEX, numéros de quais ou de portes, bâtiment
+const adrNette = s => String(s||"")
+  .replace(/\b(?:BP|B\.P\.|CS|TSA)\s*\d+/gi," ")
+  .replace(/\bCEDEX\b\s*\d*/gi," ")
+  .replace(/\b(?:quais?|portes?)\s+(?:n°\s*)?\d[^,]*/gi," ")
+  .replace(/\bb[âa]t(?:iment)?\.?\s+[^,]*/gi," ")
+  .replace(/\s*,(?:\s*,)+/g,",").replace(/\s+/g," ").replace(/^[\s,]+|[\s,]+$/g,"");
 async function geocoder(adr,cp,ville){
-  const essai = async q => { q=String(q||"").replace(/\s+/g," ").trim().slice(0,190); if(q.length<3) return null;
-    const u=new URL("https://data.geopf.fr/geocodage/search"); u.searchParams.set("q",q); u.searchParams.set("limit","1"); if(/^\d{5}$/.test(String(cp||"").trim())) u.searchParams.set("postcode",String(cp).trim());
+  const cp5 = /^\d{5}$/.test(String(cp||"").trim()) ? String(cp).trim() : "";
+  const dep = cp5 ? (/^9[78]/.test(cp5) ? cp5.slice(0,3) : cp5.slice(0,2)) : ""; // département attendu
+  // nom de commune comparable : sans accents ni articles, mots triés (« Courneuve (La) » = « La Courneuve », « Saint » = « St »)
+  const simple = s => String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim()
+    .split(" ").filter(w=>w && !/\d/.test(w) && !["le","la","les","l","de","du","des","d","cedex","arrondissement","er","e","eme"].includes(w)).map(w=>/^(saint|ste?)$/.test(w)?"st":w).sort().join(" ");
+  const vS = simple(ville);
+  const essai = async (q, avecCp, adresse) => { q=String(q||"").replace(/\s+/g," ").trim().slice(0,190); if(q.length<3) return null;
+    const u=new URL("https://data.geopf.fr/geocodage/search"); u.searchParams.set("q",q); u.searchParams.set("limit","1"); if(avecCp && cp5) u.searchParams.set("postcode",cp5);
     const r=await fetch(u); if(!r.ok) throw new Error("geocodage "+r.status); const f=((await r.json()).features||[])[0];
-    return f && f.properties && f.properties.score>=0.4 ? f.geometry.coordinates : null; };
-  let pt = adr ? await essai([adr,ville].filter(Boolean).join(" ")) : null;
-  if(!pt) pt = await essai(ville && String(ville).trim().length>=3 ? ville : [cp,ville].filter(Boolean).join(" ")); // à défaut : le centre de la commune
+    if(!(f && f.properties && f.properties.score>=0.4)) return null;
+    const pc=String(f.properties.postcode||""); if(dep && pc && !pc.startsWith(dep)) return null; // résultat hors du département : refusé
+    const cS=simple(f.properties.city); if(adresse && vS.length>=3 && cS && cS!==vS) return null; // rue trouvée dans une autre commune : refusée
+    return f.geometry.coordinates; };
+  const adrQ = adrNette(adr) ? [adrNette(adr),ville].filter(Boolean).join(" ") : "";
+  const villeQ = ville && String(ville).trim().length>=3 ? ville : [cp,ville].filter(Boolean).join(" ");
+  // un code postal CEDEX / BP (ex. 95502) n'existe pas dans la base d'adresses : on réessaie sans lui
+  let pt = adrQ ? await essai(adrQ,true,true) : null;
+  if(!pt && adrQ && cp5) pt = await essai(adrQ,false,true);
+  if(!pt) pt = await essai(villeQ,true); // à défaut : le centre de la commune
+  if(!pt && cp5) pt = await essai(villeQ,false,true); // sans code postal : seulement si c'est bien la même commune
   return pt;
 }
 async function calcKm(c){
