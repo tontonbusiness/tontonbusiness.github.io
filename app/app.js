@@ -128,6 +128,9 @@ function errMsg(e){ const m=(e&&(e.message||e.error_description||e.msg))||"";
   if(/code_utilise/.test(m)) return "Ce code a déjà servi. Demande un nouveau code à ton exploitation.";
   if(/deja_exploitant/.test(m)) return "Ce navigateur est connecté avec un compte d'exploitation. Ouvrez Dream Chauffeur sur le téléphone du conducteur.";
   if(/deja_membre/.test(m)) return "Ce compte est déjà rattaché à une entreprise.";
+  if(/Invalid TOTP|mfa_verification/i.test(m)) return "Code incorrect ou expiré : saisissez le code affiché en ce moment dans l'application.";
+  if(/mfa_absent/.test(m)) return "Aucune application d'authentification n'est liée à ce compte. Contactez contact@tontonbusiness.com.";
+  if(/insufficient_aal|AAL2/i.test(m)) return "Saisissez d'abord votre code de sécurité à 6 chiffres.";
   if(/Invalid login credentials/i.test(m)) return "E-mail ou mot de passe incorrect.";
   if(/Email not confirmed/i.test(m)) return "Votre e-mail n'est pas encore confirmé : ouvrez le lien reçu par e-mail.";
   if(/already registered|already been registered/i.test(m)) return "Un compte existe déjà avec cet e-mail : connectez-vous.";
@@ -281,6 +284,7 @@ function render(){
   renduEnAttente=false;
   const v=$("#view");
   if(MODE==="chauffeur" && !S.recovery && (!S.session || !S.mem)){ $("#side").hidden=true; v.innerHTML=vCodeEntry(); return; }
+  if(S.mfa && S.session && MODE!=="chauffeur"){ $("#side").hidden=true; v.innerHTML=vMfa(); return; }
   if(S.recovery || !S.session || !S.mem){ $("#side").hidden=true; v.innerHTML = S.recovery ? vRecovery() : (!S.session ? vAuth() : vOnboard()); return; }
   $("#side").hidden = !isStaff() || S.view==="conducteur";
   if(isStaff()) renderNav();
@@ -394,6 +398,17 @@ document.addEventListener("submit", async e=>{
   if(f.id==="recForm"){ e.preventDefault(); const {error}=await sb.auth.updateUser({password:$("#rPass").value}); if(error){ S.authErr=errMsg(error); render(); return; } S.recovery=false; S.authErr=""; toast("Mot de passe modifié"); await boot(); }
   if(f.id==="entForm"){ e.preventDefault(); const nom=$("#eNom").value.trim(); if(!nom) return; const {error}=await sb.rpc("creer_entreprise",{p_nom:nom}); if(error){ S.authErr=errMsg(error); render(); return; } S.authErr=""; await boot(); }
   if(f.id==="codeForm"){ e.preventDefault(); await joinWithCode($("#cCode").value); }
+  if(f.id==="mfaForm"){ e.preventDefault(); const btn=f.querySelector("button[type=submit]"); btn.disabled=true;
+    try{ const {data:l}=await sb.auth.mfa.listFactors(); const fac=((l&&l.totp)||[])[0]; if(!fac) throw new Error("mfa_absent");
+      const {error}=await sb.auth.mfa.challengeAndVerify({factorId:fac.id, code:$("#mfaCode").value.replace(/\D/g,"")}); if(error) throw error;
+      S.mfa=false; S.authErr=""; if(S.recovery) render(); else await boot(); }
+    catch(err){ S.authErr=errMsg(err); render(); }
+    finally{ btn.disabled=false; } }
+  if(f.id==="mfaEnrollForm"){ e.preventDefault(); const btn=f.querySelector("button[type=submit]"); btn.disabled=true;
+    try{ const {error}=await sb.auth.mfa.challengeAndVerify({factorId:S.mfaEnroll, code:$("#mfaECode").value.replace(/\D/g,"")}); if(error) throw error;
+      S.mfaEnroll=null; closeModal(); toast("Double authentification activée : le code vous sera demandé à chaque connexion."); }
+    catch(err){ const m=$("#mfaEErr"); if(m){ m.textContent=errMsg(err); m.hidden=false; } }
+    finally{ btn.disabled=false; } }
 });
 async function joinWithCode(code){
   code=(code||"").trim().toUpperCase(); if(!code) return;
@@ -1298,7 +1313,11 @@ document.addEventListener("click",async e=>{
   if(!el) return;
   const d=el.dataset;
   if(d.auth){ S.authMode=d.auth; S.authErr=""; render(); return; }
-  if(d.act==="logout"){ if(channel) sb.removeChannel(channel); await sb.auth.signOut(); S.mem=null; S.session=null; S.loaded=false; closeModal(); render(); return; }
+  if(d.act==="logout"){ if(channel) sb.removeChannel(channel); await sb.auth.signOut(); S.mem=null; S.session=null; S.loaded=false; S.mfa=false; closeModal(); render(); return; }
+  if(d.act==="securite"){ await ouvrirSecurite(); return; }
+  if(d.act==="mfaOff"){ el.hidden=true; const c=$("#mfaOffOk"); if(c) c.hidden=false; return; }
+  if(d.act==="mfaOffOk"){ const {error}=await sb.auth.mfa.unenroll({factorId:d.fid}); if(error){ toast(errMsg(error)); return; }
+    await sb.auth.refreshSession(); closeModal(); toast("Double authentification désactivée."); return; }
   if(d.act==="refresh"){ loadData(); return; }
   if(d.act==="noop") return;
   if(d.act==="export"){ exportCourses(); return; }
@@ -1363,6 +1382,39 @@ document.addEventListener("keydown",e=>{ if(e.key!=="Escape" || !$("#modal").inn
   if(modalModifie() && Date.now()-echapArme>3000){ echapArme=Date.now(); toast("Saisie non enregistrée : appuyez encore sur Échap pour abandonner."); return; }
   closeModal(); });
 
+/* ---------- double authentification (code à 6 chiffres, application d'authentification) ---------- */
+async function mfaNiveau(){ try{ const {data}=await sb.auth.mfa.getAuthenticatorAssuranceLevel(); return data||{}; }catch(e){ return {}; } }
+function vMfa(){ return authShell(`<h1>Code de sécurité</h1>
+    <p style="margin:0">Ouvrez votre application d'authentification (Google Authenticator…) et saisissez le code à 6 chiffres affiché pour Mobilog.</p>
+    <form id="mfaForm" style="display:flex;flex-direction:column;gap:10px"><label class="fld">Code à 6 chiffres<input type="text" id="mfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required autofocus></label>
+    ${S.authErr?`<p class="err" style="margin:0">${esc(S.authErr)}</p>`:""}<button class="btn btn-accent" type="submit">Valider</button></form>
+    <p class="muted" style="margin:0;font-size:13px">Téléphone perdu ou changé ? Écrivez à contact@tontonbusiness.com depuis l'adresse e-mail de votre compte.</p>
+    <button type="button" class="linkbtn" data-act="logout">Se déconnecter</button>`); }
+async function ouvrirSecurite(){
+  if(S.entreprise && S.entreprise.id==="de000000-0000-4000-8000-000000000001"){ toast("La double authentification n'est pas disponible sur le compte de démonstration, partagé entre plusieurs visiteurs."); return; }
+  const {data,error}=await sb.auth.mfa.listFactors(); if(error){ toast(errMsg(error)); return; }
+  const actif=((data&&data.totp)||[])[0];
+  if(actif){ openModal(`<h2>Sécurité du compte</h2>
+      <p style="margin:0">✅ La <b>double authentification</b> est activée depuis le ${esc(frDate(String(actif.created_at||"").slice(0,10)))}. Un code à 6 chiffres vous est demandé à chaque connexion.</p>
+      <div class="row-btns"><button type="button" class="btn btn-ghost" data-act="mfaOff">Désactiver</button>
+      <button type="button" class="btn btn-danger" data-act="mfaOffOk" data-fid="${esc(actif.id)}" id="mfaOffOk" hidden>Confirmer : désactiver la double authentification</button>
+      <button type="button" class="btn" data-act="close">Fermer</button></div>`); return; }
+  for(const f of ((data&&data.all)||[])) if(f.status!=="verified") await sb.auth.mfa.unenroll({factorId:f.id}); // tentatives non terminées
+  const {data:en,error:e2}=await sb.auth.mfa.enroll({factorType:"totp", friendlyName:"Mobilog "+new Date().toISOString().slice(0,16)});
+  if(e2){ toast(errMsg(e2)); return; }
+  S.mfaEnroll=en.id;
+  openModal(`<h2>Activer la double authentification</h2>
+    <p style="margin:0">À chaque connexion, en plus du mot de passe, un code à 6 chiffres affiché sur votre téléphone vous sera demandé. Un mot de passe volé ne suffira plus pour entrer.</p>
+    <ol style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px"><li>Installez <b>Google Authenticator</b> (ou Microsoft Authenticator) sur votre téléphone.</li>
+    <li>Dans l'application, touchez <b>+</b> puis <b>Scanner un code QR</b>, et visez ce code :</li></ol>
+    <div style="text-align:center"><img id="mfaQr" alt="QR code à scanner" width="190" height="190" style="background:#fff;padding:6px;border-radius:8px"></div>
+    <details><summary>Impossible de scanner ?</summary><p style="margin:6px 0 0">Choisissez « Saisir une clé de configuration » et recopiez : <code id="mfaSecret" style="word-break:break-all"></code></p></details>
+    <form id="mfaEnrollForm" style="display:flex;flex-direction:column;gap:10px" data-lock="keep"><label class="fld">3. Code à 6 chiffres affiché par l'application<input type="text" id="mfaECode" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required></label>
+    <p class="err" id="mfaEErr" style="margin:0" hidden></p>
+    <div class="row-btns"><button type="button" class="btn btn-ghost" data-act="close">Annuler</button><button type="submit" class="btn btn-accent">Activer</button></div></form>`);
+  $("#mfaQr").src=en.totp.qr_code; $("#mfaSecret").textContent=en.totp.secret;
+}
+
 /* ---------- démarrage ---------- */
 async function boot(){
   let { data:{session} } = await sb.auth.getSession();
@@ -1370,7 +1422,9 @@ async function boot(){
     const { error } = await sb.auth.getUser();
     if(error && !/fetch|network/i.test(error.message||"")){ await sb.auth.signOut({scope:"local"}); session=null; }
   }
-  S.session=session; S.mem=null; S.loaded=false;
+  S.session=session; S.mem=null; S.loaded=false; S.mfa=false;
+  if(session && MODE!=="chauffeur"){ const n=await mfaNiveau(); // double authentification activée : code à 6 chiffres avant tout accès
+    if(n.nextLevel==="aal2" && n.currentLevel!=="aal2"){ S.mfa=true; render(); return; } }
   if(session){
     const {data,error}=await sb.from("membres").select("entreprise_id,role,conducteur_id").eq("user_id",session.user.id).limit(1);
     if(!error && data && data[0]){ S.mem=data[0];
