@@ -17,12 +17,19 @@ T.recBloc = c => (!c || !c.id || c.statut==="annulee") ? "" :
    <button type="button" class="btn btn-ghost btn-sm" data-r="dup" data-id="${esc(c.id)}">Dupliquer…</button></div>`;
 
 function joursProposes(){ const out=[]; let d=addDays(todayIso(),1); while(out.length<10){ if(dow(d)<=5) out.push(d); d=addDays(d,1); } return out; }
+const ligneJour = (d,coche) => `<label style="display:flex;gap:10px;align-items:center"><input type="checkbox" value="${d}" ${coche?"checked":""} style="width:20px;height:20px"> ${esc(jourLong(d))}</label>`;
+function ajouterDate(){ const inp=$("#dupAutre"), box=$("#recDays"); const d=inp&&inp.value; if(!d){ toast("Choisissez une date dans le calendrier."); return; }
+  const ex=box.querySelector(`input[value="${d}"]`); if(ex){ ex.checked=true; inp.value=""; return; }
+  const apres=[...box.querySelectorAll("input")].find(i=>i.value>d); const tmp=document.createElement("div"); tmp.innerHTML=ligneJour(d,true);
+  box.insertBefore(tmp.firstElementChild, apres?apres.closest("label"):null); inp.value=""; }
 function ouvrirDup(id){
   const c=S.courses.find(x=>x.id===id); if(!c) return; cible=id;
   openModal(`<h2>Dupliquer la course</h2>
     <p class="muted">${esc(c.donneur||"Course")} · ${esc(c.enlVille||"?")} → ${esc(c.livVille||"?")}. Le chauffeur, la référence et le suivi ne sont pas copiés : les nouvelles courses arrivent dans « À planifier ».</p>
     <div style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto" id="recDays">
-      ${joursProposes().map((d,i)=>`<label style="display:flex;gap:10px;align-items:center"><input type="checkbox" value="${d}" ${i===0?"checked":""} style="width:20px;height:20px"> ${esc(jourLong(d))}</label>`).join("")}</div>
+      ${joursProposes().map((d,i)=>ligneJour(d,i===0)).join("")}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><label for="dupAutre" style="font-weight:600">Autre date :</label>
+      <input type="date" id="dupAutre" class="fin" style="width:auto"><button type="button" class="btn btn-ghost btn-sm" data-r="dupadd">Ajouter</button></div>
     <div class="row-btns"><button type="button" class="btn btn-ghost" data-act="close">Annuler</button><button type="button" class="btn btn-accent" data-r="dupgo">Dupliquer</button></div>`);
 }
 async function faireDup(){
@@ -41,5 +48,6 @@ document.addEventListener("click", async e=>{
   const el=e.target.closest("[data-r]"); if(!el) return;
   if(el.dataset.r==="dup") ouvrirDup(el.dataset.id);
   else if(el.dataset.r==="dupgo") await faireDup();
+  else if(el.dataset.r==="dupadd") ajouterDate();
 });
 })();
