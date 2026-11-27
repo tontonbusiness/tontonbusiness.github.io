@@ -774,5 +774,8 @@ document.addEventListener("submit", e=>{ if(e.target.id==="cliForm"){ e.preventD
 document.addEventListener("keydown", e=>{ if(e.key==="Enter" && e.target.matches && e.target.matches("tr[data-f]")) e.target.click(); });
 T.fx = { ready:()=>F.ready, clients:()=>F.clients, clientById, clientByName, newPiece, totals, tvaDef, fErr, openPiece, load, param:()=>F.param };
 T.geo = { geocoder, chargerLeaflet };
+// Impression : marges et pied de page « Mobilog » sur chaque page, à la place des mentions du navigateur (date, adresse de la page)
+window.addEventListener("beforeprint", ()=>{ const z=$("#printzone"); if(!z || !z.innerHTML.trim() || z.querySelector(":scope>table.pz")) return;
+  z.innerHTML=`<table class="pz"><thead><tr><td class="pz-m"></td></tr></thead><tfoot><tr><td class="pz-m"></td></tr></tfoot><tbody><tr><td>${z.innerHTML}</td></tr></tbody></table><div class="pz-pied">Document édité avec <b>Mobilog</b> — logiciel d'exploitation transport · tontonbusiness.com/mobilog</div>`; });
 window.addEventListener("afterprint", ()=>{ const z=$("#printzone"); if(z) z.innerHTML=""; });
 })();

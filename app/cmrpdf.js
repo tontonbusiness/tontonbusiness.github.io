@@ -51,6 +51,10 @@ async function ajouter(L, pdf, police, blob, legende){
   page.drawImage(jpg,{x:(W-w)/2, y:bas+(H-m-bas-h)/2, width:w, height:h});
   page.drawText(txt(legende),{x:m,y:9,size:8,font:police});
 }
+// pied de page Mobilog, petit et gris, en bas à droite de chaque page
+const PIED="Document édité avec Mobilog · tontonbusiness.com/mobilog";
+async function signer(L, pdf){ const f=await pdf.embedFont(L.StandardFonts.Helvetica), t=txt(PIED), n=7;
+  pdf.getPages().forEach(pg=>{ const {width}=pg.getSize(); pg.drawText(t,{x:width-18-f.widthOfTextAtSize(t,n), y:4, size:n, font:f, color:L.rgb(.45,.45,.45)}); }); }
 function enregistrer(octets, nom){
   const url=URL.createObjectURL(new Blob([octets],{type:"application/pdf"}));
   const a=document.createElement("a"); a.href=url; a.download=propre(nom)+".pdf"; document.body.appendChild(a); a.click(); a.remove();
@@ -65,7 +69,7 @@ async function unDoc(cid, path){
   const c=S.courses.find(x=>x.id===cid)||{}; const d=(c.docs||[]).find(x=>x.path===path)||{path,type:"bl"};
   const {L,pdf,police}=await nouveau(TYPES[d.type]||"Document");
   await ajouter(L,pdf,police,await telecharger(path),legendeDoc(c,d));
-  enregistrer(await pdf.save(), (d.type==="bl"?"CMR":(TYPES[d.type]||"Document"))+" "+nomCourse(c));
+  await signer(L, pdf); enregistrer(await pdf.save(), (d.type==="bl"?"CMR":(TYPES[d.type]||"Document"))+" "+nomCourse(c));
 }
 // 2. tous les documents de la course
 async function toutCourse(cid){
@@ -73,7 +77,7 @@ async function toutCourse(cid){
   const {L,pdf,police}=await nouveau("Documents "+nomCourse(c)); let ko=0;
   for(const d of L0){ try{ await ajouter(L,pdf,police,await telecharger(d.path),legendeDoc(c,d)); }catch(e){ ko++; } }
   if(!pdf.getPageCount()){ toast("Les documents n'ont pas pu être récupérés. Réessayez."); return; }
-  enregistrer(await pdf.save(), "Documents "+nomCourse(c));
+  await signer(L, pdf); enregistrer(await pdf.save(), "Documents "+nomCourse(c));
   if(ko) toast(ko+" document"+(ko>1?"s n'ont":" n'a")+" pas pu être ajouté"+(ko>1?"s":"")+".");
 }
 // 3. tous les BL / CMR d'une facture, dans l'ordre des lignes, avec une page récapitulative
@@ -99,7 +103,7 @@ async function toutFacture(pid){
   }
   lignes.forEach(t=>{ if(y<50) return; recap.drawText(txt(t),{x:40,y,size:10,font:/MANQUANT/.test(t)?gras:police}); y-=15; });
   if(lignes.length*15>A4[1]-150) recap.drawText(txt("(liste tronquée)"),{x:40,y:36,size:9,font:police});
-  enregistrer(await pdf.save(), "CMR facture "+(p.numero||"brouillon")+(client?" - "+client:""));
+  await signer(L, pdf); enregistrer(await pdf.save(), "CMR facture "+(p.numero||"brouillon")+(client?" - "+client:""));
   if(manque||ko) toast([manque?manque+" transport"+(manque>1?"s":"")+" sans CMR":"", ko?ko+" document"+(ko>1?"s":"")+" non récupéré"+(ko>1?"s":""):""].filter(Boolean).join(" · ")+" (voir la 1re page).");
 }
 
