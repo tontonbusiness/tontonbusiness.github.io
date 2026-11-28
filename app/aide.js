@@ -170,6 +170,7 @@ async function soumet(e){
     document.getElementById("aideBody").innerHTML=`<div class="msg bot"><h4>Merci, c'est bien envoyé.</h4>L'équipe a reçu votre signalement et reviendra vers vous.</div>`;
   }catch(err){ bt.disabled=false; st.textContent="L'envoi n'a pas fonctionné. Réessayez, ou écrivez à contact@tontonbusiness.com."; }
 }
+T.aideOuvrir = o => { onglet = o==="guide"||o==="sig" ? o : "aide"; basc(true); dessine(); };
 function maj(){ const b=document.getElementById("aideBtn"); if(!b) return; const ok=!!S.session && !(window.TP_MODE==="chauffeur"); b.hidden=!ok; if(!ok && ouvert) basc(false); }
 function init(){ build(); maj(); setInterval(maj,1500); }
 if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",init); else init();
