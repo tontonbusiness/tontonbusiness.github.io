@@ -7,13 +7,13 @@ const VERSION = "28/11/2026";
 let annonces=[], ouvert=null, chargeLe=0;
 
 const css = `
-#topbar{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:-8px auto 10px;max-width:1500px;position:relative}
-#topbar .tb{position:relative;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--fg);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+#topbar{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:-20px auto 4px;max-width:1500px;position:relative}
+#topbar .tb{position:relative;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--fg);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
 #topbar .tb:hover{background:var(--surface-2)} #topbar .tb[aria-expanded="true"]{background:var(--surface-2);border-color:var(--accent)}
-#topbar .tb svg{width:20px;height:20px}
-#topbar .av{font-weight:700;font-size:14px;background:var(--side);color:var(--side-fg);border-color:var(--side)}
+#topbar .tb svg{width:19px;height:19px}
+#topbar .av{font-weight:700;font-size:13px;background:var(--side);color:var(--side-fg);border-color:var(--side)}
 #topbar .pt{position:absolute;top:6px;right:7px;width:9px;height:9px;border-radius:50%;background:var(--danger);box-shadow:0 0 0 2px var(--surface)}
-#topbar .dd{position:absolute;top:48px;right:0;z-index:60;min-width:270px;max-width:min(380px,92vw);background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px 0}
+#topbar .dd{position:absolute;top:42px;right:0;z-index:60;min-width:270px;max-width:min(380px,92vw);background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px 0}
 #topbar .dd h3{margin:0;padding:8px 14px 6px;font-size:14px}
 #topbar .dd .it{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:0;background:none;color:var(--fg);padding:10px 14px;font-size:14px;cursor:pointer;border-top:1px solid var(--line)}
 #topbar .dd .it:hover{background:var(--surface-2)}
