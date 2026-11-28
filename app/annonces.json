@@ -1,0 +1,6 @@
+[
+  {"titre":"Mode sombre","texte":"Paramètres : choisissez l'affichage Clair, Sombre ou Auto (suit votre ordinateur ou téléphone).","type":"nouveau","publie_le":"2026-11-28T18:25:00+01:00"},
+  {"titre":"Date libre pour dupliquer une course","texte":"Dans « Dupliquer la course », choisissez n'importe quelle date au calendrier avec « Autre date ».","type":"nouveau","publie_le":"2026-11-27T15:55:00+01:00"},
+  {"titre":"Rapport des absences chauffeurs","texte":"Activité chauffeurs > Mois : jours de repos et jours sans activité de chaque chauffeur, imprimables en PDF.","type":"nouveau","publie_le":"2026-11-27T15:40:00+01:00"},
+  {"titre":"Double authentification","texte":"Protégez votre compte avec un code à 6 chiffres : menu de vos initiales > Sécurité du compte.","type":"nouveau","publie_le":"2026-11-27T13:00:00+01:00"}
+]

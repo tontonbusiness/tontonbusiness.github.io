@@ -42,8 +42,12 @@ function visible(){ return !!(S.session && S.mem && !S.mfa && window.TP_MODE!=="
 async function charger(force){
   if(!visible() || (!force && Date.now()-chargeLe<10*60000)) return;
   chargeLe=Date.now();
-  const {data,error}=await sb.from("annonces").select("id,titre,texte,type,publie_le").order("publie_le",{ascending:false}).limit(20);
-  if(!error && Array.isArray(data)){ annonces=data; dessine(); }
+  // annonces publiées avec le site (fichier annonces.json, mis à jour par Tonton Business)
+  try{ const r=await fetch("annonces.json?t="+Date.now(),{cache:"no-store"}); if(!r.ok) return;
+    const data=await r.json(); if(!Array.isArray(data)) return;
+    const now=new Date().toISOString();
+    annonces=data.filter(a=>a&&a.titre&&a.publie_le).map(a=>({...a, publie_le:new Date(a.publie_le).toISOString()})).filter(a=>a.publie_le<=now).sort((x,y)=>y.publie_le.localeCompare(x.publie_le)).slice(0,20);
+    dessine(); }catch(e){}
 }
 
 function panneau(){
