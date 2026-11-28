@@ -610,7 +610,8 @@ T.views.reglages = () => {
   const so=F.param.societe, fa=F.param.facturation; const an=Number(todayIso().slice(0,4));
   const next = t => { const c=F.compteurs.find(x=>x.type===t&&x.annee===an); const pre=(fa["prefixe_"+t]||"").trim()||{facture:"F",avoir:"A",devis:"D"}[t]; return {n:(c?c.dernier:0)+1, txt:`${pre}-${an}-${String((c?c.dernier:0)+1).padStart(4,"0")}`}; };
   const inp=(pre,k,l,v,type)=>`<label class="fld">${l}<input class="fin" type="${type||"text"}" id="${pre}_${k}" value="${esc(v??"")}"></label>`;
-  return `<div class="bar"><h1>Paramètres</h1></div>
+  const th=(()=>{ try{ return localStorage.mobilogTheme||"auto"; }catch(e){ return "auto"; } })();
+  return `<div class="bar"><h1 style="flex:1">Paramètres</h1><div class="seg" role="group" aria-label="Affichage">${[["light","☀ Clair"],["dark","☾ Sombre"],["auto","◐ Auto"]].map(([v,l])=>`<button type="button" class="${th===v?"on":""}" data-f="theme" data-v="${v}" aria-pressed="${th===v}" title="${v==="auto"?"Suit le réglage de l'ordinateur ou du téléphone":""}">${l}</button>`).join("")}</div></div>
   <div class="pan"><h2>Société</h2><span class="muted" style="font-size:13px">Ces informations sont imprimées sur vos devis, factures et avoirs. Le nom et le SIRET sont obligatoires pour finaliser une facture.</span>
     <div class="logo-box" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 0"><div style="width:200px;height:80px;border:1px dashed var(--line,#999);border-radius:8px;display:flex;align-items:center;justify-content:center;background:#fff;overflow:hidden">${so.logo?`<img src="${esc(so.logo)}" alt="Logo" style="max-width:100%;max-height:100%;object-fit:contain">`:`<span class="muted" style="font-size:12px">Aucun logo</span>`}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn btn-ghost" style="cursor:pointer">${so.logo?"Changer le logo":"Choisir un logo"}<input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp" hidden></label>${so.logo?`<button type="button" class="btn btn-ghost" data-f="logodel">Retirer le logo</button>`:""}</div>
@@ -721,6 +722,8 @@ document.addEventListener("click", async e=>{
     const {error}=await sb.from("courses").update({couts:L}).eq("id",c.id); el.disabled=false; if(error){ toast(fErr(error)); return; }
     c.couts=L; CT.lignes=L.map(l=>({ type:CT_TYPES.includes(l.libelle)?l.libelle:"Autre", texte:CT_TYPES.includes(l.libelle)?"":l.libelle, montant:l.montant, st:l.st||"" })); $("#ctBox").innerHTML=coutInner(); toast("Coûts d'achat enregistrés"); }
   else if(a==="actmode"){ A.mode=d.v; render(); }
+  else if(a==="theme"){ try{ if(d.v==="auto") localStorage.removeItem("mobilogTheme"); else localStorage.mobilogTheme=d.v; }catch(e){}
+    if(d.v==="auto") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme",d.v); render(); }
   else if(a==="actnav"){ if(d.v==="0") A.ref=todayIso(); else actDecale(Number(d.v)); render(); }
   else if(a==="actpick"){ A.cond=d.id; render(); window.scrollTo(0,0); }
   else if(a==="actprint"){ let z=$("#printzone"); if(!z){ z=document.createElement("div"); z.id="printzone"; document.body.appendChild(z); } const k=S.conducteurs.find(c=>c.id===A.cond);
