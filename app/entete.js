@@ -13,7 +13,7 @@ const css = `
 #topbar .tb svg{width:19px;height:19px}
 #topbar .av{font-weight:700;font-size:13px;background:#fff;color:#0b1d42;border-color:#fff} #topbar .av:hover,#topbar .av[aria-expanded="true"]{background:#E7ECF5;color:#0b1d42}
 #topbar .pt{position:absolute;top:5px;right:6px;width:9px;height:9px;border-radius:50%;background:#E5484D;box-shadow:0 0 0 2px #0b1d42}
-#topbar .dd{color:var(--fg);position:absolute;top:48px;right:max(16px, env(safe-area-inset-right,0px));z-index:60;min-width:270px;max-width:min(380px,92vw);background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px 0}
+#topbar .dd{color:var(--fg);position:absolute;top:48px;right:max(16px, env(safe-area-inset-right,0px));z-index:60;min-width:300px;max-width:min(440px,94vw);background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:6px 0}
 #topbar .dd h3{margin:0;padding:8px 14px 6px;font-size:14px}
 #topbar .dd .it{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:0;background:none;color:var(--fg);padding:10px 14px;font-size:14px;cursor:pointer;border-top:1px solid var(--line)}
 #topbar .dd .it:hover{background:var(--surface-2)}
@@ -22,7 +22,7 @@ const css = `
 #topbar .dd .ch{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;margin-right:6px;vertical-align:1px}
 #topbar .ch.nouveau{background:var(--run-bg);color:var(--run-bd)} #topbar .ch.maintenance{background:var(--sent-bg);color:var(--sent-bd)} #topbar .ch.info{background:var(--off-bg);color:var(--fg)}
 #topbar .dd .nv{font-weight:700} #topbar .dd .sm{font-size:12px;color:var(--muted);padding:8px 14px;border-top:1px solid var(--line)}
-#topbar .dd .who{padding:8px 14px 10px;font-size:13px;color:var(--muted)} #topbar .dd .who b{display:block;color:var(--fg);font-size:14px;word-break:break-all}
+#topbar .dd .who{padding:8px 14px 10px;font-size:13px;color:var(--muted)} #topbar .dd .who b{display:block;color:var(--fg);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media print{ #topbar{display:none!important} }`;
 
 const ICO = {
