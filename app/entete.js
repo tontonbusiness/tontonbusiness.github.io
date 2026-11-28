@@ -22,7 +22,7 @@ const css = `
 #topbar .dd .ch{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;margin-right:6px;vertical-align:1px}
 #topbar .ch.nouveau{background:var(--run-bg);color:var(--run-bd)} #topbar .ch.maintenance{background:var(--sent-bg);color:var(--sent-bd)} #topbar .ch.info{background:var(--off-bg);color:var(--fg)}
 #topbar .dd .nv{font-weight:700} #topbar .dd .sm{font-size:12px;color:var(--muted);padding:8px 14px;border-top:1px solid var(--line)}
-#topbar .dd .who{padding:8px 14px 10px;font-size:13px;color:var(--muted)} #topbar .dd .who b{display:block;color:var(--fg);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#topbar .dd .tb-moi{padding:8px 14px 10px;font-size:13px;color:var(--muted)} #topbar .dd .tb-moi b{display:block;color:var(--fg);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media print{ #topbar{display:none!important} }`;
 
 const ICO = {
@@ -57,7 +57,7 @@ function panneau(){
     <button type="button" class="it" role="menuitem" data-tb="cloche">🔔 Nouveautés</button>
     <div class="sm" style="text-align:right">Mobilog — version du ${VERSION}</div></div>`;
   if(ouvert==="moi") return `<div class="dd" role="menu" aria-label="Mon compte">
-    <div class="who"><b>${esc(S.session?.user?.email||"")}</b>${esc(S.entreprise?.nom||"")} · ${esc(ROLE[S.mem?.role]||"")}</div>
+    <div class="tb-moi"><b>${esc(S.session?.user?.email||"")}</b>${esc(S.entreprise?.nom||"")} · ${esc(ROLE[S.mem?.role]||"")}</div>
     <button type="button" class="it" role="menuitem" data-tb="reglages">⚙️ Paramètres</button>
     <button type="button" class="it" role="menuitem" data-act="securite">🔐 Sécurité du compte</button>
     <button type="button" class="it" role="menuitem" data-act="logout">↪ Se déconnecter</button></div>`;
