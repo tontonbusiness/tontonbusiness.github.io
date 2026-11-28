@@ -135,6 +135,7 @@ footer{padding-block:32px;border-top:1px solid var(--line);color:var(--mut);font
     <form id="df" class="df" novalidate action="https://formspree.io/f/maeolwjl" method="POST">
       <label>Votre société<input name="soc" autocomplete="organization" required></label>
       <label>Votre nom<input name="nom" autocomplete="name" required></label>
+      <label>Votre e-mail<input name="email" type="email" autocomplete="email" inputmode="email" required></label>
       <label>Téléphone<input name="tel" type="tel" autocomplete="tel" required></label>
       <label>Nombre de véhicules<input name="veh" inputmode="numeric" placeholder="ex. 12"></label>
       <label class="full">Un mot sur votre activité (facultatif)<textarea name="msg" rows="3"></textarea></label>
@@ -160,8 +161,8 @@ document.getElementById("df").addEventListener("submit", async function(e) {
   const v = n => (f.elements[n].value || "").trim();
   const m = document.getElementById("dmsg");
   const button = f.querySelector('button[type="submit"]');
-  if (!v("soc") || !v("nom") || !v("tel")) {
-    m.textContent = "Merci de renseigner votre société, votre nom et votre téléphone.";
+  if (!v("soc") || !v("nom") || !v("tel") || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v("email"))) {
+    m.textContent = "Merci de renseigner votre société, votre nom, une adresse e-mail valide et votre téléphone.";
     m.style.color = "#F2CB62";
     return;
   }
@@ -172,7 +173,9 @@ document.getElementById("df").addEventListener("submit", async function(e) {
   const payload = new FormData();
   payload.append("Société", v("soc"));
   payload.append("Nom", v("nom"));
+  payload.append("E-mail", v("email"));
   payload.append("Téléphone", v("tel"));
+  payload.append("_replyto", v("email"));
   payload.append("Nombre de véhicules", v("veh") || "Non précisé");
   payload.append("Activité", v("msg") || "Non précisée");
   payload.append("_subject", "Demande de démo MOBILOG - " + v("soc"));

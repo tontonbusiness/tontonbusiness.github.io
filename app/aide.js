@@ -161,6 +161,8 @@ async function soumet(e){
   d.append("Page", chaine());
   d.append("Message", m);
   d.append("Contact", c||"Non renseigné");
+  const rep = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c) ? c : (S.session && S.session.user && S.session.user.email) || "";
+  if(rep){ d.append("_replyto", rep); d.append("E-mail du compte", (S.session && S.session.user && S.session.user.email) || "—"); }
   d.append("Écran", window.innerWidth+"x"+window.innerHeight);
   d.append("_gotcha","");
   d.append("_subject","Signalement Mobilog - "+((S.entreprise&&S.entreprise.nom)||"entreprise"));
